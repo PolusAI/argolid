@@ -1,5 +1,6 @@
 #include "../core/ome_tiff_to_chunked_pyramid.h"
 #include "../core/pyramid_view.h"
+#include "../core/pyramid_compositor.h"
 #include "../utilities/utilities.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -16,6 +17,17 @@ PYBIND11_MODULE(libargolid, m) {
     .def(py::init<std::string_view, std::string_view, std::string_view, std::uint16_t, std::uint16_t>()) \
     .def("GeneratePyramid", &argolid::PyramidView::GeneratePyramid) \
     .def("AssembleBaseLevel", &argolid::PyramidView::AssembleBaseLevel) ;
+
+
+    py::class_<argolid::PyramidCompositor>(m, "PyramidCompositorCPP") \
+    .def(py::init<const std::string&, const std::string&, const std::string&>) \
+    .def("set_well_map", &argolid::PyramidCompositor::set_well_map) \
+    .def("reset_composition", &argolid::PyramidCompositor::reset_composition) \
+    .def("get_tile_data", &argolid::PyramidCompositor::get_tile_data) \
+    .def("create_xml", &argolid::PyramidCompositor::create_xml) \
+    .def("create_zattr_file", &argolid::PyramidCompositor::create_zattr_file) \
+    .def("create_auxiliary_files", &argolid::PyramidCompositor::create_auxiliary_files) \
+    .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk) ;
 
     py::enum_<argolid::VisType>(m, "VisType")
         .value("NG_Zarr", argolid::VisType::NG_Zarr)
