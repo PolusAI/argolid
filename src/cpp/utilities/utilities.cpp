@@ -441,4 +441,29 @@ std::optional<std::tuple<std::uint32_t, std::uint32_t>> GetTiffDims (const std::
 
 }
 
+std::tuple<std::optional<int>, std::optional<int>, std::optional<int>>ParseMultiscaleMetadata(const std::string& axes_list, int len){
+    
+    std::optional<int> t_index{std::nullopt}, c_index{std::nullopt}, z_index{std::nullopt};
+
+    assert(axes_list.length() <= 5);
+
+    if (axes_list.length() == len){
+        // no speculation
+        for (int i=0; i<axes_list.length(); ++i){
+            if(axes_list[i] == char{'T'}) t_index.emplace(i);
+            if(axes_list[i] == char{'C'}) c_index.emplace(i);
+            if(axes_list[i] == char{'Z'}) z_index.emplace(i);
+        }
+    } else // speculate
+    {
+        if (len == 3) {
+            z_index.emplace(0);
+        } else if (len == 4) {
+            z_index.emplace(1);
+            c_index.emplace(0);
+        }
+    }
+    return {t_index, c_index, z_index};
+}
+
 } // ns argolid

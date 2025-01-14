@@ -37,26 +37,50 @@ PyramidCompositor::PyramidCompositor(const std::string& input_pyramids_loc, cons
                 tensorstore::ReadWriteMode::read).result());
 
     _image_dtype = source.dtype().name();
-    _image_dtype_code = GetDataTypeCode(_image_dtype);
+    _data_type_code = GetDataTypeCode(_image_dtype);
 
-    auto read_spec = GetZarrSpecToRead(input_pyramids_loc);
+    // auto read_spec = GetZarrSpecToRead(input_pyramids_loc)
 
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
-                read_spec,
-                tensorstore::OpenMode::open,
-                tensorstore::ReadWriteMode::read).result());
+    // TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
+    //             read_spec,
+    //             tensorstore::OpenMode::open,
+    //             tensorstore::ReadWriteMode::read).result());
     
-    auto image_shape = source.domain().shape();
-    const auto read_chunk_shape = source.chunk_layout().value().read_chunk_shape();
+    // auto image_shape = source.domain().shape();
+    // const auto read_chunk_shape = source.chunk_layout().value().read_chunk_shape();
 
-    if (image_shape.size() == 5){
-        _t_index.emplace(0);
-        _c_index.emplace(1);
-        _z_index.emplace(2);
-    } else {
-        assert(image_shape.size() >= 2);
-        std::tie(_t_index, _c_index, _z_index) = ParseMultiscaleMetadata("XYCTZ", image_shape.size());
-    }
+    // if (image_shape.size() == 5){
+    //     _image_height = image_shape[3];
+    //     _image_width = image_shape[4];
+    //     _image_depth = image_shape[2];
+    //     _num_channels = image_shape[1];
+    //     _num_tsteps = image_shape[0];
+    //     _t_index.emplace(0);
+    //     _c_index.emplace(1);
+    //     _z_index.emplace(2);
+    // } else {
+    //     assert(image_shape.size() >= 2);
+    //     std::tie(_t_index, _c_index, _z_index) = ParseMultiscaleMetadata(axes_list, image_shape.size());
+    //     _image_height = image_shape[image_shape.size()-2];
+    //     _image_width = image_shape[image_shape.size()-1];
+    //     if (_t_index.has_value()) {
+    //         _num_tsteps = image_shape[_t_index.value()];
+    //     } else {
+    //         _num_tsteps = 1;
+    //     }
+
+    //     if (_c_index.has_value()) {
+    //         _num_channels = image_shape[_c_index.value()];
+    //     } else {
+    //         _num_channels = 1;
+    //     }
+
+    //     if (_z_index.has_value()) {
+    //         _image_depth = image_shape[_z_index.value()];
+    //     } else {
+    //         _image_depth = 1;
+    //     }
+    // }
 
     // _data_type = source.dtype().name();
     // _data_type_code = GetDataTypeCode(_data_type);
@@ -118,9 +142,9 @@ void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_int, int 
 
     // Compute ranges in global coordinates
     int y_start = y_int * CHUNK_SIZE;
-    int y_end = std::min((y_int + 1) * CHUNK_SIZE, (int)std::get<1>(_zarr_arrays[level])[0]);
+    int y_end = std::min((y_int + 1) * CHUNK_SIZE, std::get<1>(_zarr_arrays[level])[0]);
     int x_start = x_int * CHUNK_SIZE;
-    int x_end = std::min((x_int + 1) * CHUNK_SIZE, (int)std::get<1>(_zarr_arrays[level])[1]);
+    int x_end = std::min((x_int + 1) * CHUNK_SIZE, std::get<1>(_zarr_arrays[level])[1]);
 
     int assembled_width = x_end - x_start;
     int assembled_height = y_end - y_start;
@@ -151,28 +175,13 @@ void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_int, int 
             std::string input_file_name = _composition_map[{col, row, channel}];
             std::filesystem::path zarrArrayLoc = std::filesystem::path(input_file_name) / "data.zarr/0/" / std::to_string(level);
 
-            auto read_data = *std::get<0>(ReadImageData(zarrArrayLoc, Seq(tile_y_start, tile_y_end), Seq(tile_x_start, tile_x_end))).get();
+            auto read_data = std::get<0>(ReadImageData(zarrArrayLoc, Seq(tile_y_start, tile_y_end), Seq(tile_x_start, tile_x_end))).get();
             
-            // Use std::visit to handle the different types in the variant
-            std::visit([&](auto& assembled_vec) {
-                using T = typename std::decay_t<decltype(assembled_vec)>::value_type;
-                
-                for (int i = local_y_start; i < local_y_start + tile_y_end - tile_y_start; ++i) {
-                    for (int j = local_x_start; j < local_x_start + tile_x_end - tile_x_start; ++j) {
-                        // Use std::visit to extract the value from read_data
-                        std::visit([&](auto& value) {
-                            assembled_vec[i * assembled_width + j] = static_cast<T>(value[(i - local_y_start) * (tile_x_end - tile_x_start) + (j - local_x_start)]);
-                        }, read_data);
-                    }
+            for (int i = local_y_start; i < local_y_start + tile_y_end - tile_y_start; ++i) {
+                for (int j = local_x_start; i < local_x_start + tile_x_end - tile_x_start; ++j) {
+                    assembled_image[i*(tile_x_end - tile_x_start) + j] = read_data[(i-local_y_start)*(tile_x_end - tile_x_start) + (j-local_x_start)];
                 }
-            }, assembled_image);
-            
-            
-            // for (int i = local_y_start; i < local_y_start + tile_y_end - tile_y_start; ++i) {
-            //     for (int j = local_x_start; i < local_x_start + tile_x_end - tile_x_start; ++j) {
-            //         assembled_image[i*(tile_x_end - tile_x_start) + j] = read_data[(i-local_y_start)*(tile_x_end - tile_x_start) + (j-local_x_start)];
-            //     }
-            // }
+            }
             
             // // Open the Zarr array for reading with TensorStore
             // auto zarrSpec = tensorstore::Context::Default()
@@ -198,34 +207,16 @@ void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_int, int 
         row_start_pos += tile_y_end - tile_y_start;
     }
 
-    auto data = *(std::get<0>(_zarr_arrays[level]).get());
-     // WriteImageData(
-    //     _input_pyramids_loc,
-    //     data, 
-    //     Seq(y_start,y_end), Seq(x_start, x_end), 
-    //     Seq(0,0), Seq(channel, channel), Seq(0,0)
-    // );
-
-    // Assuming _zarr_arrays[level] is of type std::tuple<std::shared_ptr<std::variant<...>>, std::vector<long long>>
-    //auto& [variant_ptr, some_vector] = _zarr_arrays[level]; // Structured binding (C++17)
-
-    std::visit([&](const auto& array) {
-        using T = std::decay_t<decltype(array)>;
-
-        // Use external variables and call WriteImageData
-        WriteImageData(
-            _input_pyramids_loc,
-            array,  // Access the data from the std::shared_ptr
-            Seq(y_start, y_end), 
-            Seq(x_start, x_end), 
-            Seq(0, 0), 
-            Seq(channel, channel), 
-            Seq(0, 0)
-        );
-    }, data); // Dereference the shared_ptr to get the variant
+    
+    WriteImageData(
+        _input_pyramids_loc,
+        std::get<0>(_zarr_arrays[level]).get(), 
+        Seq(y_start,y_end), Seq(x_start, x_end), 
+        Seq(0,0), Seq(channel, channel), Seq(0,0)
+    );
 }
 
-void PyramidCompositor::setComposition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map) {
+void PyramidCompositor::setComposition(const std::unordered_map<std::tuple<int, int, int>, std::string>& comp_map) {
     _composition_map = comp_map;
 
     for (const auto& coord : comp_map) {
@@ -254,7 +245,7 @@ void PyramidCompositor::setComposition(const std::unordered_map<std::tuple<int, 
                 
                 auto image_shape = source.domain().shape();
                 _image_dtype = source.dtype().name();
-                _image_dtype_code = GetDataTypeCode(_image_dtype);
+                _data_type_code = GetDataTypeCode(_image_dtype);
 
                 _unit_image_shapes[std::stoi(res_key)] = {
                     image_shape[image_shape.size()-2],
@@ -330,11 +321,9 @@ image_data PyramidCompositor::GetAssembledImageVector(int size){
     }
 }
 
-
-template <typename T>
 void PyramidCompositor::WriteImageData(
     const std::string& path,
-    std::vector<T>& image,
+    image_data& image,
     const Seq& rows,
     const Seq& cols,
     const std::optional<Seq>& layers,
@@ -384,13 +373,7 @@ void PyramidCompositor::WriteImageData(
 }
 
 template <typename T>
-std::shared_ptr<std::vector<T>> PyramidCompositor::GetImageDataTemplated(
-    tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>& source,
-    const Seq& rows, 
-    const Seq& cols, 
-    const Seq& layers, 
-    const Seq& channels, 
-    const Seq& tsteps) {
+std::shared_ptr<std::vector<T>> PyramidCompositor::GetImageDataTemplated(const Seq& rows, const Seq& cols, const Seq& layers, const Seq& channels, const Seq& tsteps){
 
     const auto data_height = rows.Stop() - rows.Start() + 1;
     const auto data_width = cols.Stop() - cols.Start() + 1;
@@ -400,7 +383,7 @@ std::shared_ptr<std::vector<T>> PyramidCompositor::GetImageDataTemplated(
 
     auto read_buffer = std::make_shared<std::vector<T>>(data_height*data_width*data_depth*data_num_channels*data_tsteps); 
     auto array = tensorstore::Array(read_buffer->data(), {data_tsteps, data_num_channels, data_depth, data_height, data_width}, tensorstore::c_order);
-    tensorstore::IndexTransform<> read_transform = tensorstore::IdentityTransform(source.domain());
+    tensorstore::intTransform<> read_transform = tensorstore::IdentityTransform(source.domain());
 
     int x_int=1, y_int=0;
     if (_t_index.has_value()){
@@ -427,12 +410,12 @@ std::shared_ptr<std::vector<T>> PyramidCompositor::GetImageDataTemplated(
     return read_buffer;
 }
 
-std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>> PyramidCompositor::ReadImageData(
+std::tuple<std::shared_ptr<image_data>, std::vector<int>> PyramidCompositor::ReadImageData(
     const std::string& fname, 
     const Seq& rows, const Seq& cols, 
-    const Seq& layers, 
-    const Seq& channels, 
-    const Seq& tsteps) {
+    const Seq& layers = Seq(0,0), 
+    const Seq& channels = Seq(0,0), 
+    const Seq& tsteps = Seq(0,0)) {
     
     auto read_spec = GetZarrSpecToRead(fname);
 
@@ -480,50 +463,50 @@ std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>> PyramidCompos
     // }
     
     _image_dtype = source.dtype().name();
-    _image_dtype_code = GetDataTypeCode(_image_dtype);
+    _data_type_code = GetDataTypeCode(_image_dtype);
     
     switch (_data_type_code)
     {
     case (1):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint8_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint8_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (2):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint16_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});  
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint16_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));   
     case (4):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint32_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint32_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (8):
         return std::make_tuple( 
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint64_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::uint64_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (16):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int8_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int8_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (32):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int16_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});  
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int16_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));   
     case (64):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int32_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int32_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (128):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int64_t>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<std::int64_t>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (256):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<float>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<float>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     case (512):
         return std::make_tuple(
-            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<double>(source, rows, cols, layers, channels, tsteps)))),
-            std::vector<std::int64_t>{image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]});
+            std::make_shared<image_data>(std::move(*(GetImageDataTemplated<double>(rows, cols, layers, channels, tsteps)))),
+            std::make_tuple(image_shape[image_shape.size()-2], image_shape[image_shape.size()-1]));
     default:
         break;
     }

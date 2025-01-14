@@ -72,4 +72,6 @@ void WriteTSZattrFilePlateImage(
     const std::string& zarr_root_dir, 
     const std::unordered_map<int, std::tuple<int, int, int, int, int>>& plate_image_shape);
 
+std::tuple<std::optional<int>, std::optional<int>, std::optional<int>>ParseMultiscaleMetadata(const std::string& axes_list, int len);
+
 } // ns argolid
