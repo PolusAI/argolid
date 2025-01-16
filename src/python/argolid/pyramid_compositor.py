@@ -321,7 +321,7 @@ class PyramidCompositorPY:
         self._chunk_cache = set()
         for l in self._unit_image_shapes:
             level = int(l)
-            self._plate_image_shapes[level] = (
+            self._plate_image_shapes[level] = (1,
                 1,
                 num_channels,
                 1,

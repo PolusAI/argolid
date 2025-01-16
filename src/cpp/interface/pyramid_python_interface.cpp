@@ -20,14 +20,22 @@ PYBIND11_MODULE(libargolid, m) {
 
 
     py::class_<argolid::PyramidCompositor>(m, "PyramidCompositorCPP") \
-    .def(py::init<const std::string&, const std::string&, const std::string&>) \
-    .def("set_well_map", &argolid::PyramidCompositor::set_well_map) \
+    .def(py::init<const std::string&, const std::string&, const std::string&>()) \
     .def("reset_composition", &argolid::PyramidCompositor::reset_composition) \
-    .def("get_tile_data", &argolid::PyramidCompositor::get_tile_data) \
     .def("create_xml", &argolid::PyramidCompositor::create_xml) \
     .def("create_zattr_file", &argolid::PyramidCompositor::create_zattr_file) \
     .def("create_auxiliary_files", &argolid::PyramidCompositor::create_auxiliary_files) \
-    .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk) ;
+    .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk);
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::uint8_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::uint16_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::uint32_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::uint64_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::int8_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::int16_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::int32_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<std::int64_t>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<float>) \
+    // .def("write_zarr_chunk", &argolid::PyramidCompositor::write_zarr_chunk<double>) ;
 
     py::enum_<argolid::VisType>(m, "VisType")
         .value("NG_Zarr", argolid::VisType::NG_Zarr)

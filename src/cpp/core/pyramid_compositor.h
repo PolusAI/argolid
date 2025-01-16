@@ -23,17 +23,60 @@ struct TupleHash {
     }
 };
 
-using image_data = std::variant<std::vector<std::uint8_t>,
-                                std::vector<std::uint16_t>, 
-                                std::vector<std::uint32_t>, 
-                                std::vector<std::uint64_t>, 
-                                std::vector<std::int8_t>, 
-                                std::vector<std::int16_t>,
-                                std::vector<std::int32_t>,
-                                std::vector<std::int64_t>,
-                                std::vector<float>,
-                                std::vector<double>>;
+// using image_data = std::variant<std::vector<std::uint8_t>,
+//                                 std::vector<std::uint16_t>, 
+//                                 std::vector<std::uint32_t>, 
+//                                 std::vector<std::uint64_t>, 
+//                                 std::vector<std::int8_t>, 
+//                                 std::vector<std::int16_t>,
+//                                 std::vector<std::int32_t>,
+//                                 std::vector<std::int64_t>,
+//                                 std::vector<float>,
+//                                 std::vector<double>>;
 
+using image_data = std::variant<tensorstore::Array<std::uint8_t, 2>,
+                                tensorstore::Array<std::uint16_t, 2>, 
+                                tensorstore::Array<std::uint32_t, 2>, 
+                                tensorstore::Array<std::uint64_t, 2>, 
+                                tensorstore::Array<std::int8_t, 2>, 
+                                tensorstore::Array<std::int16_t, 2>,
+                                tensorstore::Array<std::int32_t, 2>,
+                                tensorstore::Array<std::int64_t, 2>,
+                                tensorstore::Array<float, 2>,
+                                tensorstore::Array<double, 2>,
+
+                                tensorstore::Array<std::uint8_t, 3>,
+                                tensorstore::Array<std::uint16_t, 3>, 
+                                tensorstore::Array<std::uint32_t, 3>, 
+                                tensorstore::Array<std::uint64_t, 3>, 
+                                tensorstore::Array<std::int8_t, 3>, 
+                                tensorstore::Array<std::int16_t, 3>,
+                                tensorstore::Array<std::int32_t, 3>,
+                                tensorstore::Array<std::int64_t, 3>,
+                                tensorstore::Array<float, 3>,
+                                tensorstore::Array<double, 3>,
+
+                                tensorstore::Array<std::uint8_t, 4>,
+                                tensorstore::Array<std::uint16_t, 4>, 
+                                tensorstore::Array<std::uint32_t, 4>, 
+                                tensorstore::Array<std::uint64_t, 4>, 
+                                tensorstore::Array<std::int8_t, 4>, 
+                                tensorstore::Array<std::int16_t, 4>,
+                                tensorstore::Array<std::int32_t, 4>,
+                                tensorstore::Array<std::int64_t, 4>,
+                                tensorstore::Array<float, 4>,
+                                tensorstore::Array<double, 4>,
+
+                                tensorstore::Array<std::uint8_t, 5>,
+                                tensorstore::Array<std::uint16_t, 5>, 
+                                tensorstore::Array<std::uint32_t, 5>, 
+                                tensorstore::Array<std::uint64_t, 5>, 
+                                tensorstore::Array<std::int8_t, 5>, 
+                                tensorstore::Array<std::int16_t, 5>,
+                                tensorstore::Array<std::int32_t, 5>,
+                                tensorstore::Array<std::int64_t, 5>,
+                                tensorstore::Array<float, 5>,
+                                tensorstore::Array<double, 5>>;
 class Seq
 {
     private:
@@ -56,7 +99,12 @@ public:
     void create_zattr_file();
     void create_zgroup_file();
     void create_auxiliary_files();
+
+    template <typename T>
+    void _write_zarr_chunk(int level, int channel, int y_index, int x_index);
+
     void write_zarr_chunk(int level, int channel, int y_index, int x_index);
+
 private:
     
     template <typename T>
@@ -69,34 +117,35 @@ private:
         const std::optional<Seq>& channels,
         const std::optional<Seq>& tsteps);
 
-    template <typename T>
-    std::shared_ptr<std::vector<T>> GetImageDataTemplated(
-        tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>& source,
+    auto ReadImageData(
+        const std::string& fname,
         const Seq& rows, 
         const Seq& cols, 
-        const Seq& layers, 
-        const Seq& channels, 
-        const Seq& tsteps);
-
-    std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>> ReadImageData(
-        const std::string& fname,  
-        const Seq& rows, const Seq& cols, 
         const Seq& layers = Seq(0,0), 
         const Seq& channels = Seq(0,0), 
-        const Seq& tsteps = Seq(0,0)
-    );
+        const Seq& tsteps = Seq(0,0));
+
+    // std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>> ReadImageData(
+    //     const std::string& fname,  
+    //     const Seq& rows, const Seq& cols, 
+    //     const Seq& layers = Seq(0,0), 
+    //     const Seq& channels = Seq(0,0), 
+    //     const Seq& tsteps = Seq(0,0)
+    // );
 
     image_data GetAssembledImageVector(int size);
 
     void setComposition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map);
 
-    // members for pyramid composition
+    // members for pyramid composition 
     std::string _input_pyramids_loc;
     std::string _output_pyramid_name;
     std::string _ome_metadata_file;
     std::unordered_map<int, std::tuple<int, int, int, int, int>> _plate_image_shapes;
     // std::unordered_map<int, std::tuple< ,std::tuple<int, int, int, int, int>> _zarr_arrays;
     std::unordered_map<int, std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>>> _zarr_arrays; // tuple at 0 is the image and at 1 is the size
+
+    //std::unordered_map
 
     std::unordered_map<int, std::pair<int, int>> _unit_image_shapes;
     std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash> _composition_map;
@@ -105,6 +154,7 @@ private:
     int _pyramid_levels;
     int _num_channels;
 
+    tensorstore::DataType _image_ts_dtype;
     std::string _image_dtype;
     std::uint16_t _image_dtype_code;
 
