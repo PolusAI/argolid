@@ -39,6 +39,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
       mkdir build_man
       cd build_man
       cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_STATIC=FALSE -DCMAKE_BUILD_TYPE=Release ..
-      make install -j4
+      sudo make install -j4
       cd ../../
 fi
