@@ -205,7 +205,7 @@ void WriteTSZattrFile(const std::string& tiff_file_name, const std::string& zarr
 void WriteTSZattrFilePlateImage(
     const std::string& tiff_file_name, 
     const std::string& zarr_root_dir, 
-    const std::unordered_map<int, std::tuple<int, int, int, int, int>>& plate_image_shape){
+    const std::unordered_map<int, std::vector<std::int64_t>>& plate_image_shape){
 
     json zarr_multiscale_axes;
     zarr_multiscale_axes = json::parse(R"([
@@ -366,8 +366,13 @@ void GenerateOmeXML(const std::string& image_name, const std::string& output_fil
 void CreateXML(
     const std::string& image_name, 
     const std::string& output_file, 
-    const std::tuple<int, int, int, int, int>& image_shape,
+    const std::vector<std::int64_t>& image_shape,
     const std::string& image_dtype) {
+
+
+    if (image_shape.size() != 5) {
+        throw std::invalid_argument("image_shape must have length 5.");
+    }
 
     pugi::xml_document doc;
 
@@ -393,15 +398,15 @@ void CreateXML(
     pixelsNode.append_attribute("DimensionOrder") = "XYZCT";
     pixelsNode.append_attribute("ID") = "Pixels:0";
     pixelsNode.append_attribute("Interleaved") = "false";
-    pixelsNode.append_attribute("SizeC") = std::to_string(std::get<1>(image_shape)).c_str();
-    pixelsNode.append_attribute("SizeZ") = std::to_string(std::get<2>(image_shape)).c_str();
-    pixelsNode.append_attribute("SizeT") = std::to_string(std::get<0>(image_shape)).c_str();
-    pixelsNode.append_attribute("SizeX") = std::to_string(std::get<4>(image_shape)).c_str();
-    pixelsNode.append_attribute("SizeY") = std::to_string(std::get<3>(image_shape)).c_str();
+    pixelsNode.append_attribute("SizeC") = std::to_string(image_shape[1]).c_str();
+    pixelsNode.append_attribute("SizeZ") = std::to_string(image_shape[2]).c_str();
+    pixelsNode.append_attribute("SizeT") = std::to_string(image_shape[0]).c_str();
+    pixelsNode.append_attribute("SizeX") = std::to_string(image_shape[4]).c_str();
+    pixelsNode.append_attribute("SizeY") = std::to_string(image_shape[3]).c_str();
     pixelsNode.append_attribute("Type") = image_dtype.c_str();
 
     // Create the <Channel> elements
-    for(std::int64_t i=0; i<std::get<1>(image_shape); ++i){
+    for(std::int64_t i=0; i<image_shape[1]; ++i){
       pugi::xml_node channelNode = pixelsNode.append_child("Channel");
       channelNode.append_attribute("ID") = ("Channel:0:" + std::to_string(i)).c_str();
       channelNode.append_attribute("SamplesPerPixel") = "1";

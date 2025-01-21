@@ -64,13 +64,13 @@ std::optional<std::tuple<std::uint32_t, std::uint32_t>> GetTiffDims (const std::
 void CreateXML(
     const std::string& image_name, 
     const std::string& output_file, 
-    const std::tuple<int, int, int, int, int>& image_shape,
+    const std::vector<std::int64_t>& image_shape,
     const std::string& image_dtype);
 
 void WriteTSZattrFilePlateImage(
     const std::string& tiff_file_name, 
     const std::string& zarr_root_dir, 
-    const std::unordered_map<int, std::tuple<int, int, int, int, int>>& plate_image_shape);
+    const std::unordered_map<int, std::vector<std::int64_t>>& plate_image_shape);
 
 std::tuple<std::optional<int>, std::optional<int>, std::optional<int>>ParseMultiscaleMetadata(const std::string& axes_list, int len);
 

@@ -105,11 +105,12 @@ public:
 
     void write_zarr_chunk(int level, int channel, int y_index, int x_index);
 
+    void setComposition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map);
 private:
     
     template <typename T>
     void WriteImageData(
-        const std::string& path,
+        tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>& source,
         std::vector<T>& image,
         const Seq& rows,
         const Seq& cols,
@@ -135,17 +136,15 @@ private:
 
     image_data GetAssembledImageVector(int size);
 
-    void setComposition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map);
-
     // members for pyramid composition 
     std::string _input_pyramids_loc;
-    std::string _output_pyramid_name;
+    std::filesystem::path _output_pyramid_name;
     std::string _ome_metadata_file;
-    std::unordered_map<int, std::tuple<int, int, int, int, int>> _plate_image_shapes;
+    std::unordered_map<int, std::vector<std::int64_t>> _plate_image_shapes;
     // std::unordered_map<int, std::tuple< ,std::tuple<int, int, int, int, int>> _zarr_arrays;
-    std::unordered_map<int, std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>>> _zarr_arrays; // tuple at 0 is the image and at 1 is the size
+    //std::unordered_map<int, <std::vector<std::int64_t>>> _zarr_arrays; // tuple at 0 is the image and at 1 is the size
 
-    //std::unordered_map
+    std::unordered_map<int, tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>> _zarr_arrays;
 
     std::unordered_map<int, std::pair<int, int>> _unit_image_shapes;
     std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash> _composition_map;

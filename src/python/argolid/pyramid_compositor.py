@@ -419,7 +419,7 @@ class PyramidCompositor2:
             output_pyramid_name (str): The name of the zarr pyramid file.
         """
         self._pyramid_compositor_cpp = PyramidCompositorCPP(input_pyramids_loc, out_dir, output_pyramid_name)
-        
+        self._chunk_cache: set = set()
 
     def _create_xml(self) -> None:
         """
@@ -468,12 +468,14 @@ class PyramidCompositor2:
         Args:
             composition_map (dict): A dictionary mapping composition images to file paths.
         """
+        self._chunk_cache = set()
         self._pyramid_compositor_cpp.set_composition(composition_map)
 
     def reset_composition(self) -> None:
         """
         Resets the pyramid composition by removing the pyramid file and clearing internal data structures.
         """
+        self._chunk_cache = None
         self._pyramid_compositor_cpp.reset_composition()
 
     def get_zarr_chunk(
@@ -496,4 +498,25 @@ class PyramidCompositor2:
                 the requested channel does not exist, or the requested y_index or x_index
                 is out of bounds.
         """
-        self._pyramid_compositor_cpp.get_zarr_chunk(level, channel, y_index, x_index)
+        # TODO: Add this to C++ side
+        # if self._composition_map is None:
+        #     raise ValueError("No composition map is set. Unable to generate pyramid")
+
+        # if level not in self._unit_image_shapes:
+        #     raise ValueError(f"Requested level ({level}) does not exist")
+
+        # if channel >= self._num_channels:
+        #     raise ValueError(f"Requested channel ({channel}) does not exist")
+
+        # if y_index > (self._plate_image_shapes[level][3] // CHUNK_SIZE):
+        #     raise ValueError(f"Requested y index ({y_index}) does not exist")
+
+        # if x_index > (self._plate_image_shapes[level][4] // CHUNK_SIZE):
+        #     raise ValueError(f"Requested y index ({x_index}) does not exist")
+
+        if (level, channel, y_index, x_index) in self._chunk_cache:
+            return
+        else:
+            self._pyramid_compositor_cpp.write_zarr_chunk(level, channel, y_index, x_index)
+            self._chunk_cache.add((level, channel, y_index, x_index))
+            return
