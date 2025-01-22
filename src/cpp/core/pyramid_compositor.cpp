@@ -290,6 +290,7 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
 
     _plate_image_shapes.clear();
     _zarr_arrays.clear();
+    _chunk_cache.clear();
 
     for (auto& [level, shape]: _unit_image_shapes) {
         
