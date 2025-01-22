@@ -105,7 +105,8 @@ public:
 
     void write_zarr_chunk(int level, int channel, int y_index, int x_index);
 
-    void setComposition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map);
+    void set_composition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map);
+
 private:
     
     template <typename T>
@@ -118,35 +119,18 @@ private:
         const std::optional<Seq>& channels,
         const std::optional<Seq>& tsteps);
 
-    auto ReadImageData(
-        const std::string& fname,
-        const Seq& rows, 
-        const Seq& cols, 
-        const Seq& layers = Seq(0,0), 
-        const Seq& channels = Seq(0,0), 
-        const Seq& tsteps = Seq(0,0));
-
-    // std::tuple<std::shared_ptr<image_data>, std::vector<std::int64_t>> ReadImageData(
-    //     const std::string& fname,  
-    //     const Seq& rows, const Seq& cols, 
-    //     const Seq& layers = Seq(0,0), 
-    //     const Seq& channels = Seq(0,0), 
-    //     const Seq& tsteps = Seq(0,0)
-    // );
-
     image_data GetAssembledImageVector(int size);
 
-    // members for pyramid composition 
     std::string _input_pyramids_loc;
     std::filesystem::path _output_pyramid_name;
     std::string _ome_metadata_file;
+
     std::unordered_map<int, std::vector<std::int64_t>> _plate_image_shapes;
-    // std::unordered_map<int, std::tuple< ,std::tuple<int, int, int, int, int>> _zarr_arrays;
-    //std::unordered_map<int, <std::vector<std::int64_t>>> _zarr_arrays; // tuple at 0 is the image and at 1 is the size
 
     std::unordered_map<int, tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>> _zarr_arrays;
 
     std::unordered_map<int, std::pair<int, int>> _unit_image_shapes;
+
     std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash> _composition_map;
 
     std::set<std::tuple<int, int, int, int>> _tile_cache;
@@ -157,7 +141,8 @@ private:
     std::string _image_dtype;
     std::uint16_t _image_dtype_code;
 
-    std::optional<int>_z_index, _c_index, _t_index;
-    int _x_index, _y_index;
+    int _x_index = 4;
+    int _y_index = 3;
+    int _c_index = 1;
 };
 } // ns argolid
