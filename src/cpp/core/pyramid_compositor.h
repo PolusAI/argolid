@@ -23,17 +23,6 @@ struct TupleHash {
     }
 };
 
-// using image_data = std::variant<std::vector<std::uint8_t>,
-//                                 std::vector<std::uint16_t>, 
-//                                 std::vector<std::uint32_t>, 
-//                                 std::vector<std::uint64_t>, 
-//                                 std::vector<std::int8_t>, 
-//                                 std::vector<std::int16_t>,
-//                                 std::vector<std::int32_t>,
-//                                 std::vector<std::int64_t>,
-//                                 std::vector<float>,
-//                                 std::vector<double>>;
-
 using image_data = std::variant<tensorstore::Array<std::uint8_t, 2>,
                                 tensorstore::Array<std::uint16_t, 2>, 
                                 tensorstore::Array<std::uint32_t, 2>, 
