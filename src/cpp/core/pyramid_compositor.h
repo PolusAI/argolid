@@ -23,49 +23,6 @@ struct TupleHash {
     }
 };
 
-using image_data = std::variant<tensorstore::Array<std::uint8_t, 2>,
-                                tensorstore::Array<std::uint16_t, 2>, 
-                                tensorstore::Array<std::uint32_t, 2>, 
-                                tensorstore::Array<std::uint64_t, 2>, 
-                                tensorstore::Array<std::int8_t, 2>, 
-                                tensorstore::Array<std::int16_t, 2>,
-                                tensorstore::Array<std::int32_t, 2>,
-                                tensorstore::Array<std::int64_t, 2>,
-                                tensorstore::Array<float, 2>,
-                                tensorstore::Array<double, 2>,
-
-                                tensorstore::Array<std::uint8_t, 3>,
-                                tensorstore::Array<std::uint16_t, 3>, 
-                                tensorstore::Array<std::uint32_t, 3>, 
-                                tensorstore::Array<std::uint64_t, 3>, 
-                                tensorstore::Array<std::int8_t, 3>, 
-                                tensorstore::Array<std::int16_t, 3>,
-                                tensorstore::Array<std::int32_t, 3>,
-                                tensorstore::Array<std::int64_t, 3>,
-                                tensorstore::Array<float, 3>,
-                                tensorstore::Array<double, 3>,
-
-                                tensorstore::Array<std::uint8_t, 4>,
-                                tensorstore::Array<std::uint16_t, 4>, 
-                                tensorstore::Array<std::uint32_t, 4>, 
-                                tensorstore::Array<std::uint64_t, 4>, 
-                                tensorstore::Array<std::int8_t, 4>, 
-                                tensorstore::Array<std::int16_t, 4>,
-                                tensorstore::Array<std::int32_t, 4>,
-                                tensorstore::Array<std::int64_t, 4>,
-                                tensorstore::Array<float, 4>,
-                                tensorstore::Array<double, 4>,
-
-                                tensorstore::Array<std::uint8_t, 5>,
-                                tensorstore::Array<std::uint16_t, 5>, 
-                                tensorstore::Array<std::uint32_t, 5>, 
-                                tensorstore::Array<std::uint64_t, 5>, 
-                                tensorstore::Array<std::int8_t, 5>, 
-                                tensorstore::Array<std::int16_t, 5>,
-                                tensorstore::Array<std::int32_t, 5>,
-                                tensorstore::Array<std::int64_t, 5>,
-                                tensorstore::Array<float, 5>,
-                                tensorstore::Array<double, 5>>;
 class Seq
 {
     private:
