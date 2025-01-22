@@ -74,4 +74,13 @@ void WriteTSZattrFilePlateImage(
 
 std::tuple<std::optional<int>, std::optional<int>, std::optional<int>>ParseMultiscaleMetadata(const std::string& axes_list, int len);
 
+// custom hashing for using std::tuple as key
+struct TupleHash {
+    template <typename... Args>
+    std::size_t operator()(const std::tuple<Args...>& t) const {
+        return std::apply([](const auto&... args) {
+            return (std::hash<std::decay_t<decltype(args)>>{}(args) ^ ...);
+        }, t);
+    }
+};
 } // ns argolid

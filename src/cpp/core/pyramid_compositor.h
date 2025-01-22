@@ -9,19 +9,11 @@
 #include "tensorstore/tensorstore.h"
 #include "tensorstore/spec.h"
 
+#include "../utilities/utilities.h"
+
 namespace fs = std::filesystem;
 namespace argolid {
 static constexpr int CHUNK_SIZE = 1024;
-
-// custom hashing for using std::tuple as key
-struct TupleHash {
-    template <typename... Args>
-    std::size_t operator()(const std::tuple<Args...>& t) const {
-        return std::apply([](const auto&... args) {
-            return (std::hash<std::decay_t<decltype(args)>>{}(args) ^ ...);
-        }, t);
-    }
-};
 
 class Seq
 {
