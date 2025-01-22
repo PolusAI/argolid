@@ -1,5 +1,4 @@
 #include "pyramid_compositor.h"
-#include "../utilities/utilities.h"
 
 #include <fstream>
 #include <stdexcept>
@@ -31,7 +30,7 @@ PyramidCompositor::PyramidCompositor(const std::string& input_pyramids_loc, cons
 
 void PyramidCompositor::create_xml() {
     CreateXML(
-        this->_output_pyramid_name, 
+        this->_output_pyramid_name.u8string(), 
         this->_ome_metadata_file,
         this->_plate_image_shapes[0],
         this->_image_dtype
@@ -40,14 +39,14 @@ void PyramidCompositor::create_xml() {
 
 void PyramidCompositor::create_zattr_file() {
     WriteTSZattrFilePlateImage(
-        this->_output_pyramid_name,
+        this->_output_pyramid_name.u8string(),
         this->_output_pyramid_name.u8string() + "/data.zarr/0",
         this->_plate_image_shapes
     );
 }
 
 void PyramidCompositor::create_zgroup_file() {
-    WriteVivZgroupFiles(this->_output_pyramid_name);
+    WriteVivZgroupFiles(this->_output_pyramid_name.u8string());
 }
 
 void PyramidCompositor::create_auxiliary_files() {
@@ -253,7 +252,7 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
                 std::string res_key = dic["path"];
                 std::filesystem::path zarr_array_loc = std::filesystem::path(file_path) / "data.zarr/0/" / res_key;
 
-                auto read_spec = GetZarrSpecToRead(zarr_array_loc);
+                auto read_spec = GetZarrSpecToRead(zarr_array_loc.u8string());
 
                 tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
 
