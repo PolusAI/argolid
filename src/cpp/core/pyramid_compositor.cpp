@@ -56,10 +56,42 @@ void PyramidCompositor::create_auxiliary_files() {
     create_zgroup_file();
 }
 
-void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_int, int x_int) {
+void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_index, int x_index) {
+
+    std::tuple<int, int, int, int> chunk = std::make_tuple(level, channel, y_index, x_index);
+
+    if (_chunk_cache.find(chunk) != _chunk_cache.end()) {
+        return;
+    }
+
+    if (_composition_map.empty()) {
+        throw std::runtime_error("No composition map is set. Unable to generate pyramid");
+    }
+
+    if (_unit_image_shapes.find(level) == _unit_image_shapes.end()) {
+        throw std::invalid_argument("Requested level (" + std::to_string(level) + ") does not exist");
+    }
+
+    if (channel >= _num_channels) {
+        throw std::invalid_argument("Requested channel (" + std::to_string(channel) + ") does not exist");
+    }
+
+    auto plate_shape_it = _plate_image_shapes.find(level);
+    if (plate_shape_it == _plate_image_shapes.end()) {
+        throw std::invalid_argument("No plate image shapes found for level (" + std::to_string(level) + ")");
+    }
+
+    const auto& plate_shape = plate_shape_it->second;
+    if (plate_shape.size() < 4 || y_index > (plate_shape[3] / CHUNK_SIZE)) {
+        throw std::invalid_argument("Requested y index (" + std::to_string(y_index) + ") does not exist");
+    }
+
+    if (plate_shape.size() < 5 || x_index > (plate_shape[4] / CHUNK_SIZE)) {
+        throw std::invalid_argument("Requested x index (" + std::to_string(x_index) + ") does not exist");
+    }
 
     // get datatype by opening
-    std::string input_file_name = _composition_map[{x_int, y_int, channel}];
+    std::string input_file_name = _composition_map[{x_index, y_index, channel}];
     std::filesystem::path zarrArrayLoc = _output_pyramid_name / input_file_name / std::filesystem::path("data.zarr/0/") / std::to_string(level);
 
     auto read_spec = GetZarrSpecToRead(zarrArrayLoc.u8string());
@@ -75,49 +107,51 @@ void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_int, int 
 
     switch(data_type){
         case 1:
-            _write_zarr_chunk<uint8_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<uint8_t>(level, channel, y_index, x_index);
             break;
         case 2:
-            _write_zarr_chunk<uint16_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<uint16_t>(level, channel, y_index, x_index);
             break;
         case 4:
-            _write_zarr_chunk<uint32_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<uint32_t>(level, channel, y_index, x_index);
             break;
         case 8:
-            _write_zarr_chunk<uint64_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<uint64_t>(level, channel, y_index, x_index);
             break;
         case 16:
-            _write_zarr_chunk<int8_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<int8_t>(level, channel, y_index, x_index);
             break;
         case 32:
-            _write_zarr_chunk<int16_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<int16_t>(level, channel, y_index, x_index);
             break;
         case 64:
-            _write_zarr_chunk<int32_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<int32_t>(level, channel, y_index, x_index);
             break;
         case 128:
-            _write_zarr_chunk<int64_t>(level, channel, y_int, x_int);
+            _write_zarr_chunk<int64_t>(level, channel, y_index, x_index);
             break;
         case 256:
-            _write_zarr_chunk<float>(level, channel, y_int, x_int);
+            _write_zarr_chunk<float>(level, channel, y_index, x_index);
             break;
         case 512:
-            _write_zarr_chunk<double>(level, channel, y_int, x_int);
+            _write_zarr_chunk<double>(level, channel, y_index, x_index);
             break;
         default:
             break;
         }
+    
+    _chunk_cache.insert(chunk);
 }
 
 template <typename T>
-void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_int, int x_int) {
+void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, int x_index) {
 
     // Compute ranges in global coordinates
     auto image_shape = _zarr_arrays[level].domain().shape();
-    int y_start = y_int * CHUNK_SIZE;
-    int y_end = std::min((y_int + 1) * CHUNK_SIZE, (int)image_shape[3]);
-    int x_start = x_int * CHUNK_SIZE;
-    int x_end = std::min((x_int + 1) * CHUNK_SIZE, (int)image_shape[4]);
+    int y_start = y_index * CHUNK_SIZE;
+    int y_end = std::min((y_index + 1) * CHUNK_SIZE, (int)image_shape[3]);
+    int x_start = x_index * CHUNK_SIZE;
+    int x_end = std::min((x_index + 1) * CHUNK_SIZE, (int)image_shape[4]);
 
     int assembled_width = x_end - x_start;
     int assembled_height = y_end - y_start;
@@ -242,7 +276,8 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
         }
     }
 
-    int num_rows = 0, num_cols = 0, _num_channels = 0;
+    int num_rows = 0, num_cols = 0;
+    _num_channels = 0;
     for (const auto& coord : comp_map) {
         num_rows = std::max(num_rows, std::get<1>(coord.first));
         num_cols = std::max(num_cols, std::get<0>(coord.first));
@@ -293,7 +328,7 @@ void PyramidCompositor::reset_composition() {
     fs::remove_all(_output_pyramid_name);
     _composition_map.clear();
     _plate_image_shapes.clear();
-    _tile_cache.clear();
+    _chunk_cache.clear();
     _plate_image_shapes.clear();
     _zarr_arrays.clear();
 }

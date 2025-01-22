@@ -119,8 +119,6 @@ private:
         const std::optional<Seq>& channels,
         const std::optional<Seq>& tsteps);
 
-    image_data GetAssembledImageVector(int size);
-
     std::string _input_pyramids_loc;
     std::filesystem::path _output_pyramid_name;
     std::string _ome_metadata_file;
@@ -133,7 +131,7 @@ private:
 
     std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash> _composition_map;
 
-    std::set<std::tuple<int, int, int, int>> _tile_cache;
+    std::set<std::tuple<int, int, int, int>> _chunk_cache;
     int _pyramid_levels;
     int _num_channels;
 
