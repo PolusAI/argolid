@@ -66,6 +66,8 @@ private:
 
     std::unordered_map<int, tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>> _zarr_arrays;
 
+    std::unordered_map<std::string, tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic>> _zarr_readers;
+
     std::unordered_map<int, std::pair<int, int>> _unit_image_shapes;
 
     std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash> _composition_map;

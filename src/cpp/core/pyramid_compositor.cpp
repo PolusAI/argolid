@@ -212,10 +212,16 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
 
                 tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
 
-                TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
-                            read_spec,
-                            tensorstore::OpenMode::open,
-                            tensorstore::ReadWriteMode::read).result());
+                if (_zarr_readers.find(zarrArrayLoc.u8string()) != _zarr_readers.end()) {
+                    source = _zarr_readers[zarrArrayLoc.u8string()];
+                } else {
+                    TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
+                                read_spec,
+                                tensorstore::OpenMode::open,
+                                tensorstore::ReadWriteMode::read).result());
+
+                    _zarr_readers[zarrArrayLoc.u8string()] = source;
+                }
 
                 std::vector<T> read_buffer((tile_x_end-tile_x_start)*(tile_y_end-tile_y_start));
                 auto array = tensorstore::Array(read_buffer.data(), {tile_y_end-tile_y_start, tile_x_end-tile_x_start}, tensorstore::c_order);
@@ -274,31 +280,44 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
             const auto& multiscale_metadata = attrs["multiscales"][0]["datasets"];
             _pyramid_levels = multiscale_metadata.size();
             for (const auto& dic : multiscale_metadata) {
-                std::string res_key = dic["path"];
-                std::filesystem::path zarr_array_loc = std::filesystem::path(file_path) / "data.zarr/0/" / res_key;
 
-                auto read_spec = GetZarrSpecToRead(zarr_array_loc.u8string());
+                _th_pool.detach_task([
+                    dic,
+                    file_path,
+                    this
+                ](){
+                    std::string res_key = dic["path"];
 
-                tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
+                    std::filesystem::path zarr_array_loc = std::filesystem::path(file_path) / "data.zarr/0/" / res_key;
 
-                TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
-                            read_spec,
-                            tensorstore::OpenMode::open,
-                            tensorstore::ReadWriteMode::read).result());
-                
-                auto image_shape = source.domain().shape();
-                _image_ts_dtype = source.dtype();
-                _image_dtype = source.dtype().name();
-                _image_dtype_code = GetDataTypeCode(_image_dtype);
+                    auto read_spec = GetZarrSpecToRead(zarr_array_loc.u8string());
 
-                _unit_image_shapes[std::stoi(res_key)] = {
-                    image_shape[image_shape.size()-2],
-                    image_shape[image_shape.size()-1]
-                };
+                    tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
+
+                    TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
+                                read_spec,
+                                tensorstore::OpenMode::open,
+                                tensorstore::ReadWriteMode::read).result());
+
+                    // store reader to use later
+                    _zarr_readers[zarr_array_loc.u8string()] = source;
+                    
+                    auto image_shape = source.domain().shape();
+                    _image_ts_dtype = source.dtype();
+                    _image_dtype = source.dtype().name();
+                    _image_dtype_code = GetDataTypeCode(_image_dtype);
+
+                    _unit_image_shapes[std::stoi(res_key)] = {
+                        image_shape[image_shape.size()-2],
+                        image_shape[image_shape.size()-1]
+                    };
+                });
             }
             break;
         }
     }
+
+    _th_pool.wait();
 
     int num_rows = 0, num_cols = 0;
     _num_channels = 0;
@@ -330,21 +349,29 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
     for (const auto& [level, shape] : _unit_image_shapes) {
         std::string path = _output_pyramid_name.u8string() + "/data.zarr/0/" + std::to_string(level);
 
-        tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
+        _th_pool.detach_task([
+                    path,
+                    level=level,
+                    this
+        ](){
+            tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
 
-        TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
-                    GetZarrSpecToWrite(
-                        path,
-                        _plate_image_shapes[level],
-                        {1,1,1, CHUNK_SIZE, CHUNK_SIZE},
-                        ChooseBaseDType(_image_ts_dtype).value().encoded_dtype
-                    ),
-                    tensorstore::OpenMode::create |
-                    tensorstore::OpenMode::delete_existing,
-                    tensorstore::ReadWriteMode::write).result());
-        
-        _zarr_arrays[level] = source;
+            TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
+                        GetZarrSpecToWrite(
+                            path,
+                            _plate_image_shapes[level],
+                            {1,1,1, CHUNK_SIZE, CHUNK_SIZE},
+                            ChooseBaseDType(_image_ts_dtype).value().encoded_dtype
+                        ),
+                        tensorstore::OpenMode::create |
+                        tensorstore::OpenMode::delete_existing,
+                        tensorstore::ReadWriteMode::write).result());
+            
+            _zarr_arrays[level] = source;
+        });
     }
+
+    _th_pool.wait();
 
     create_auxiliary_files();
 }
