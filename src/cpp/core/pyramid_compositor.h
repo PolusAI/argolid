@@ -5,6 +5,7 @@
 #include <set>
 #include <filesystem>
 #include <tuple>
+#include "BS_thread_pool.hpp"
 
 #include "tensorstore/tensorstore.h"
 #include "tensorstore/spec.h"
@@ -38,14 +39,14 @@ public:
     void create_zgroup_file();
     void create_auxiliary_files();
 
-    template <typename T>
-    void _write_zarr_chunk(int level, int channel, int y_index, int x_index);
-
     void write_zarr_chunk(int level, int channel, int y_index, int x_index);
 
     void set_composition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map);
 
 private:
+
+    template <typename T>
+    void _write_zarr_chunk(int level, int channel, int y_index, int x_index);
     
     template <typename T>
     void WriteImageData(
@@ -80,5 +81,7 @@ private:
     int _x_index = 4;
     int _y_index = 3;
     int _c_index = 1;
+
+    BS::thread_pool<BS::tp::none> _th_pool;
 };
 } // ns argolid

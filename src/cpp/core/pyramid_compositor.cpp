@@ -163,6 +163,8 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
 
     int row_start_pos = y_start;
 
+    //int row, local_y_start, tile_y_start, tile_y_dim, tile_y_end, col_start_pos;
+    //int col, local_x_start, tile_x_start, tile_x_dim, tile_x_end;
     while (row_start_pos < y_end) {
 
         int row = row_start_pos / unit_image_height;
@@ -181,47 +183,70 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
             int tile_x_dim = std::min((col + 1) * unit_image_width - col_start_pos, x_end - col_start_pos);
             int tile_x_end = tile_x_start + tile_x_dim;
 
-            // Fetch input file path from composition map
-            std::string input_file_name = _composition_map[{col, row, channel}];
-            std::filesystem::path zarrArrayLoc = std::filesystem::path(input_file_name) / "data.zarr/0/" / std::to_string(level);
+            _th_pool.detach_task([ 
+                row,
+                col,
+                channel,
+                level,
+                x_start,
+                x_end,
+                local_x_start, 
+                tile_x_start, 
+                tile_x_dim, 
+                tile_x_end,
+                local_y_start, 
+                tile_y_start, 
+                tile_y_dim, 
+                tile_y_end,
+                y_start,
+                y_end,
+                &assembled_image_vec, 
+                assembled_width,
+                this
+            ]() {
+                // Fetch input file path from composition map
+                std::string input_file_name = _composition_map[{col, row, channel}];
+                std::filesystem::path zarrArrayLoc = std::filesystem::path(input_file_name) / "data.zarr/0/" / std::to_string(level);
 
-            auto read_spec = GetZarrSpecToRead(zarrArrayLoc.u8string());
+                auto read_spec = GetZarrSpecToRead(zarrArrayLoc.u8string());
 
-            tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
+                tensorstore::TensorStore<void, -1, tensorstore::ReadWriteMode::dynamic> source;
 
-            TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
-                        read_spec,
-                        tensorstore::OpenMode::open,
-                        tensorstore::ReadWriteMode::read).result());
+                TENSORSTORE_CHECK_OK_AND_ASSIGN(source, tensorstore::Open(
+                            read_spec,
+                            tensorstore::OpenMode::open,
+                            tensorstore::ReadWriteMode::read).result());
 
-            std::vector<T> read_buffer((tile_x_end-tile_x_start)*(tile_y_end-tile_y_start));
-            auto array = tensorstore::Array(read_buffer.data(), {tile_y_end-tile_y_start, tile_x_end-tile_x_start}, tensorstore::c_order);
+                std::vector<T> read_buffer((tile_x_end-tile_x_start)*(tile_y_end-tile_y_start));
+                auto array = tensorstore::Array(read_buffer.data(), {tile_y_end-tile_y_start, tile_x_end-tile_x_start}, tensorstore::c_order);
 
-            tensorstore::IndexTransform<> read_transform = tensorstore::IdentityTransform(source.domain());
+                tensorstore::IndexTransform<> read_transform = tensorstore::IdentityTransform(source.domain());
 
-            Seq rows = Seq(y_start, y_end);
-            Seq cols = Seq(x_start, x_end); 
-            Seq tsteps = Seq(0, 0);
-            Seq channels = Seq(channel-1, channel); 
-            Seq layers = Seq(0, 0);
-        
-            read_transform = (std::move(read_transform) | tensorstore::Dims(_y_index).ClosedInterval(rows.Start(), rows.Stop()-1) |
-                                                          tensorstore::Dims(_x_index).ClosedInterval(cols.Start(), cols.Stop()-1)).value();
+                Seq rows = Seq(y_start, y_end);
+                Seq cols = Seq(x_start, x_end); 
+                Seq tsteps = Seq(0, 0);
+                Seq channels = Seq(channel-1, channel); 
+                Seq layers = Seq(0, 0);
+            
+                read_transform = (std::move(read_transform) | tensorstore::Dims(_y_index).ClosedInterval(rows.Start(), rows.Stop()-1) |
+                                                            tensorstore::Dims(_x_index).ClosedInterval(cols.Start(), cols.Stop()-1)).value();
 
-            tensorstore::Read(source | read_transform, tensorstore::UnownedToShared(array)).value();
+                tensorstore::Read(source | read_transform, tensorstore::UnownedToShared(array)).value();
 
-            for (int i = local_y_start; i < local_y_start + tile_y_end - tile_y_start; ++i) {
-                for (int j = local_x_start; j < local_x_start + tile_x_end - tile_x_start; ++j) {
-                    assembled_image_vec[i * assembled_width + j] = read_buffer[(i - local_y_start) * (tile_x_end - tile_x_start) + (j - local_x_start)];
+                for (int i = local_y_start; i < local_y_start + tile_y_end - tile_y_start; ++i) {
+                    for (int j = local_x_start; j < local_x_start + tile_x_end - tile_x_start; ++j) {
+                        assembled_image_vec[i * assembled_width + j] = read_buffer[(i - local_y_start) * (tile_x_end - tile_x_start) + (j - local_x_start)];
+                    }
                 }
-            }
+            });
 
             col_start_pos += tile_x_end - tile_x_start;
         }
         row_start_pos += tile_y_end - tile_y_start;
     }
 
-    //auto& write_source = _zarr_arrays[level];
+    // wait for threads to finish assembling vector before writing
+    _th_pool.wait();
 
     WriteImageData(
         _zarr_arrays[level],
