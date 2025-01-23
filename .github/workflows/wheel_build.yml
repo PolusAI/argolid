@@ -78,7 +78,7 @@ jobs:
           CIBW_TEST_COMMAND: python -W default -m unittest discover -s {project}/tests -v
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: argolid-wheels
           path: dist/*.whl
@@ -129,7 +129,7 @@ jobs:
           CIBW_TEST_COMMAND: python -W default -m unittest discover -s {project}/tests -v
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: argolid-wheels-apple-arm64
           path: dist/*.whl
