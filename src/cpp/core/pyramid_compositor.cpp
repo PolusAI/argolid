@@ -91,7 +91,7 @@ void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_index, in
     }
 
     if (plate_shape.size() < 5 || x_index > (plate_shape[4] / CHUNK_SIZE)) {
-        tstd::cerr << "Requested x index (" + std::to_string(x_index) + ") does not exist" << std::endl;
+        std::cerr << "Requested x index (" + std::to_string(x_index) + ") does not exist" << std::endl;
         return;
     }
 
