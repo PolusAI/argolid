@@ -64,29 +64,35 @@ void PyramidCompositor::write_zarr_chunk(int level, int channel, int y_index, in
     }
 
     if (_composition_map.empty()) {
-        throw std::runtime_error("No composition map is set. Unable to generate pyramid");
+        std::cerr << "No composition map is set. Unable to generate pyramid" << std::endl;
+        return;
     }
 
     if (_unit_image_shapes.find(level) == _unit_image_shapes.end()) {
-        throw std::invalid_argument("Requested level (" + std::to_string(level) + ") does not exist");
+        std::cerr << "Requested level (" + std::to_string(level) + ") does not exist" << std::endl;
+        return;
     }
 
     if (channel >= _num_channels) {
-        throw std::invalid_argument("Requested channel (" + std::to_string(channel) + ") does not exist");
+        std::cerr << "Requested channel (" + std::to_string(channel) + ") does not exist" << std::endl;
+        return;
     }
 
     auto plate_shape_it = _plate_image_shapes.find(level);
     if (plate_shape_it == _plate_image_shapes.end()) {
-        throw std::invalid_argument("No plate image shapes found for level (" + std::to_string(level) + ")");
+        std::cerr << "No plate image shapes found for level (" + std::to_string(level) + ")" << std::endl;
+        return;
     }
 
     const auto& plate_shape = plate_shape_it->second;
     if (plate_shape.size() < 4 || y_index > (plate_shape[3] / CHUNK_SIZE)) {
-        throw std::invalid_argument("Requested y index (" + std::to_string(y_index) + ") does not exist");
+        std::cerr << "Requested y index (" + std::to_string(y_index) + ") does not exist" << std::endl;
+        return;
     }
 
     if (plate_shape.size() < 5 || x_index > (plate_shape[4] / CHUNK_SIZE)) {
-        throw std::invalid_argument("Requested x index (" + std::to_string(x_index) + ") does not exist");
+        tstd::cerr << "Requested x index (" + std::to_string(x_index) + ") does not exist" << std::endl;
+        return;
     }
 
     // get datatype by opening
