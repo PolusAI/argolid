@@ -245,10 +245,12 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
 
                 tensorstore::Read(source | read_transform, tensorstore::UnownedToShared(array)).value();
 
-                for (int i = local_y_start; i < local_y_start + tile_y_end - tile_y_start; ++i) {
-                    for (int j = local_x_start; j < local_x_start + tile_x_end - tile_x_start; ++j) {
-                        assembled_image_vec[i * assembled_width + j] = read_buffer[(i - local_y_start) * (tile_x_end - tile_x_start) + (j - local_x_start)];
-                    }
+                for (int i = 0; i < tile_y_end - tile_y_start; ++i) {
+                    std::memcpy(
+                        &assembled_image_vec[(local_y_start + i) * assembled_width + local_x_start], // Destination
+                        &read_buffer[i * (tile_x_end - tile_x_start)], // Source
+                        (tile_x_end - tile_x_start) * sizeof(assembled_image_vec[0]) // Number of bytes
+                    );
                 }
             });
 
