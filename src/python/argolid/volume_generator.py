@@ -174,7 +174,7 @@ class VolumeGenerator:
         c: int = args[3]
 
         zarr_array: ts.TensorStore = ts.open(zarr_spec).result()
-        commit_futures: List[ts.Future[None]] = []
+        write_futures: List[ts.Future[None]] = []
         try:
             br: BioReader = BioReader(input_file, backend="tensorstore")
             for y in range(0, br.Y, self.CHUNK_SIZE):
@@ -184,10 +184,12 @@ class VolumeGenerator:
                     write_future = zarr_array[c, z, y:y_max, x:x_max].write(
                             br[y:y_max, x:x_max, 0, 0, 0].squeeze()
                         )
-                    commit_futures.append(write_future.commit_future)
+                    write_futures.append(write_future)
 
-            for commit_future in commit_futures:
-                commit_future.result()
+            while len(write_futures) != 0:
+                for write_future in write_futures:
+                    if write_future.done():
+                        write_futures.remove(write_future)
         except Exception as e:
             print(f"Caught an exception for item : {e}")
 
@@ -381,7 +383,7 @@ class PyramidGenerator3D:
 
         ds_zarr_array_write: ts.TensorStore = ts.open(ds_write_spec).result()
 
-        commit_futures: List[ts.Future[None]] = []
+        write_futures: List[ts.Future[None]] = []
 
         for c in range(C):
             for z in range(Z):
@@ -391,11 +393,13 @@ class PyramidGenerator3D:
                         x_max = min([X, x + self.CHUNK_SIZE])
                         block = ds_zarr_array[c, z, y:y_max, x:x_max].read().result()
                         write_future = ds_zarr_array_write[c, z, y:y_max, x:x_max].write(block)
-                        commit_futures.append(write_future.commit_future)
+                        write_futures.append(write_future)
 
         # Ensure all writes are durable (i.e., non-transactional and committed)
-        for commit_future in commit_futures:
-            commit_future.result()
+        while len(write_futures) != 0:
+            for write_future in write_futures:
+                if write_future.done():
+                    write_futures.remove(write_future)
 
         self._create_zgroup_file(f"{self._zarr_loc_dir}/{level}")
 
