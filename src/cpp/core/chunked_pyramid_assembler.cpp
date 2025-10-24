@@ -90,8 +90,8 @@ ImageInfo OmeTiffCollToChunked::Assemble(const std::string& input_dir,
   }
   PLOG_INFO << "Total images found: " << image_vec.size() <<std::endl;
   auto t1 = std::chrono::high_resolution_clock::now();
-  auto [x_dim, y_dim, c_dim, num_dims] = GetZarrParams(v);
-
+  auto [x_dim, y_dim, z_dim, c_dim, num_dims]  = GetZarrParams(v);
+  
   if (image_vec.size() != 0){
     //std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
@@ -106,13 +106,16 @@ ImageInfo OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     whole_image._full_image_width = (grid_x_max-grid_x_min+1)*whole_image._chunk_size_x;
     whole_image._full_image_height = (grid_y_max-grid_y_min+1)*whole_image._chunk_size_y;
     whole_image._num_channels = grid_c_max-grid_c_min+1;
+    whole_image._num_z_slices = test_image_shape[2];
     
     std::vector<std::int64_t> new_image_shape(num_dims,1);
     std::vector<std::int64_t> chunk_shape(num_dims,1);
     new_image_shape[y_dim] = whole_image._full_image_height;
     new_image_shape[x_dim] = whole_image._full_image_width;
+    new_image_shape[z_dim] = whole_image._num_z_slices;
     chunk_shape[y_dim] = whole_image._chunk_size_y;
     chunk_shape[x_dim] = whole_image._chunk_size_x;
+
     whole_image._data_type = test_source.dtype().name();
     if (v == VisType::NG_Zarr || v == VisType::Viv){
       new_image_shape[c_dim] = whole_image._num_channels;
@@ -133,46 +136,53 @@ ImageInfo OmeTiffCollToChunked::Assemble(const std::string& input_dir,
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
     
-    auto t4 = std::chrono::high_resolution_clock::now();
-    for(const auto& i: image_vec){        
-      th_pool.detach_task([&dest, i, x_dim=x_dim, y_dim=y_dim, c_dim=c_dim, v, &whole_image, grid_c_min, grid_x_min, grid_y_min]() {
+    for(const auto& i: image_vec){   
+      // loop through all z indexes
+      for (std::int64_t z = 0; z < whole_image._num_z_slices; ++z) { 
+        th_pool.detach_task([&dest, i, z, x_dim=x_dim, y_dim=y_dim, c_dim=c_dim, z_dim=z_dim, v, &whole_image, grid_c_min, grid_x_min, grid_y_min]() {
+          TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
+                                      GetOmeTiffSpecToRead(i.file_name),
+                                      tensorstore::OpenMode::open,
+                                      tensorstore::ReadWriteMode::read).result());
+          PLOG_INFO << "Opening "<< i.file_name;
+          auto image_shape = source.domain().shape();
+          if (z >= image_shape[2]) {
+            return; 
+          }
 
+          auto image_width = image_shape[4];
+          auto image_height = image_shape[3];
+          auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
+                                                            tensorstore::value_init, source.dtype());
 
-        TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
-                                    GetOmeTiffSpecToRead(i.file_name),
-                                    tensorstore::OpenMode::open,
-                                    tensorstore::ReadWriteMode::read).result());
-        PLOG_INFO << "Opening "<< i.file_name;
-        auto image_shape = source.domain().shape();
-        auto image_width = image_shape[4];
-        auto image_height = image_shape[3];
-        auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
-                                                          tensorstore::value_init, source.dtype());
+          // initiate a read
+          tensorstore::Read(source | 
+                tensorstore::Dims(2).SizedInterval(z, 1) |
+                tensorstore::Dims(3).ClosedInterval(0, image_height-1) |
+                tensorstore::Dims(4).ClosedInterval(0, image_width-1) ,
+                array).value();
 
-        // initiate a read
-        tensorstore::Read(source | 
-              tensorstore::Dims(3).ClosedInterval(0, image_height-1) |
-              tensorstore::Dims(4).ClosedInterval(0, image_width-1) ,
-              array).value();
+          tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
+          if(v == VisType::PCNG){
+            transform = (std::move(transform) | tensorstore::Dims("z", "channel").IndexSlice({z, i._c_grid-grid_c_min}) 
+                                              | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
+                                              | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)
+                                              | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
 
-        tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-        if(v == VisType::PCNG){
-          transform = (std::move(transform) | tensorstore::Dims("z", "channel").IndexSlice({0, i._c_grid-grid_c_min}) 
-                                            | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
-                                            | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)
-                                            | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
-
-        } else if (v == VisType::NG_Zarr){
-          transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid-grid_c_min, 1) 
-                                            | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
-                                            | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)).value();
-        } else if (v == VisType::Viv){
-          transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid-grid_c_min, 1) 
-                                            | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
-                                            | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)).value();
-        }
-        tensorstore::Write(array, dest | transform).value();
-      });
+          } else if (v == VisType::NG_Zarr){
+            transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid-grid_c_min, 1) 
+                                              | tensorstore::Dims(z_dim).SizedInterval(z, 1) 
+                                              | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
+                                              | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)).value();
+          } else if (v == VisType::Viv){
+            transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid-grid_c_min, 1) 
+                                              | tensorstore::Dims(z_dim).SizedInterval(z, 1)
+                                              | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
+                                              | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)).value();
+          }
+          tensorstore::Write(array, dest | transform).value();
+        });
+      }
     }
 
     th_pool.wait();

@@ -25,7 +25,7 @@ namespace argolid {
 void OmeTiffToChunkedConverter::Convert( const std::string& input_file, const std::string& output_file, 
                                       const std::string& scale_key, const VisType v, BS::thread_pool<BS::tp::none>& th_pool){
   
-  const auto [x_dim, y_dim, c_dim, num_dims] = GetZarrParams(v);
+  const auto [x_dim, y_dim, z_dim, c_dim, num_dims] = GetZarrParams(v);
 
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open(GetOmeTiffSpecToRead(input_file),
                             tensorstore::OpenMode::open,

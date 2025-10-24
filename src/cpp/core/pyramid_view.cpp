@@ -57,7 +57,7 @@ namespace argolid {
     }
     PLOG_DEBUG << "Total images found: " << img_count << std::endl;
     auto t1 = std::chrono::high_resolution_clock::now();
-    auto [x_dim, y_dim, c_dim, num_dims] = GetZarrParams(v);
+    auto [x_dim, y_dim, z_dim, c_dim, num_dims] = GetZarrParams(v);
 
     ImageInfo whole_image;
 
@@ -69,12 +69,12 @@ namespace argolid {
         tensorstore::OpenMode::open,
         tensorstore::ReadWriteMode::read).result());
       auto test_image_shape = test_source.domain().shape();
-
       whole_image._chunk_size_x = test_image_shape[4] + 2*x_spacing;
       whole_image._chunk_size_y = test_image_shape[3] + 2*y_spacing;
       whole_image._full_image_width = (grid_x_max + 1) * whole_image._chunk_size_x;
       whole_image._full_image_height = (grid_y_max + 1) * whole_image._chunk_size_y;
       whole_image._num_channels = grid_c_max + 1;
+      whole_image._num_z_slices = test_image_shape[2];
 
       std::vector < std::int64_t > new_image_shape(num_dims, 1);
       std::vector < std::int64_t > chunk_shape(num_dims, 1);
@@ -84,6 +84,7 @@ namespace argolid {
       chunk_shape[x_dim] = whole_image._chunk_size_x;
       whole_image._data_type = test_source.dtype().name();
       new_image_shape[c_dim] = whole_image._num_channels;
+      new_image_shape[z_dim] = whole_image._num_z_slices;
 
       auto output_spec = [&test_source, &new_image_shape, &chunk_shape, &zarr_array_path, this]() {
           return GetZarrSpecToWrite(zarr_array_path, new_image_shape, chunk_shape, ChooseBaseDType(test_source.dtype()).value().encoded_dtype);
@@ -97,7 +98,7 @@ namespace argolid {
 
       auto t4 = std::chrono::high_resolution_clock::now();
       for (const auto & [file_name, location]: coordinate_map) {
-        th_pool.detach_task([ &dest, file_name=file_name, location=location, x_dim=x_dim, y_dim=y_dim, c_dim=c_dim, v, &whole_image, this]() {
+        th_pool.detach_task([ &dest, file_name=file_name, location=location, x_dim=x_dim, y_dim=y_dim, c_dim=c_dim, z_dim=z_dim, v, &whole_image, this]() {
 
           TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
             GetOmeTiffSpecToRead(image_coll_path + "/" + file_name),
@@ -107,31 +108,44 @@ namespace argolid {
           auto image_shape = source.domain().shape();
           auto image_width = image_shape[4];
           auto image_height = image_shape[3];
+          auto image_depth = image_shape[2];
+
           auto array = tensorstore::AllocateArray({
               image_height,
               image_width
             }, tensorstore::c_order,
             tensorstore::value_init, source.dtype());
+          
+          for (std::int64_t z = 0; z < whole_image._num_z_slices; ++z) {
+            if (z >= image_depth) {
+              PLOG_WARNING << "Image " << file_name << " does not have enough z slices. Expected: " << whole_image._num_z_slices << ", found: " << image_depth;
+              continue; // skip this image if it does not have enough z slices
+            }
 
-          // initiate a read
-          tensorstore::Read(source |
-            tensorstore::Dims(3).ClosedInterval(0, image_height - 1) |
-            tensorstore::Dims(4).ClosedInterval(0, image_width - 1),
-            array).value();
 
-          const auto & [x_grid, y_grid, c_grid] = location;
+            // initiate a read
+            tensorstore::Read(source |
+              tensorstore::Dims(2).SizedInterval(z, 1) |
+              tensorstore::Dims(3).ClosedInterval(0, image_height - 1) |
+              tensorstore::Dims(4).ClosedInterval(0, image_width - 1),
+              array).value();
 
-          tensorstore::IndexTransform < > transform = tensorstore::IdentityTransform(dest.domain());
-          if (v == VisType::NG_Zarr) {
-            transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(c_grid, 1) |
-              tensorstore::Dims(y_dim).SizedInterval(y_grid * whole_image._chunk_size_y + y_spacing, image_height) |
-              tensorstore::Dims(x_dim).SizedInterval(x_grid * whole_image._chunk_size_x + x_spacing, image_width)).value();
-          } else if (v == VisType::Viv) {
-            transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(c_grid, 1) |
-              tensorstore::Dims(y_dim).SizedInterval(y_grid * whole_image._chunk_size_y + y_spacing, image_height) |
-              tensorstore::Dims(x_dim).SizedInterval(x_grid * whole_image._chunk_size_x + x_spacing, image_width)).value();
-          }
-          tensorstore::Write(array, dest | transform).value();
+            const auto & [x_grid, y_grid, c_grid] = location;
+
+            tensorstore::IndexTransform < > transform = tensorstore::IdentityTransform(dest.domain());
+            if (v == VisType::NG_Zarr) {
+              transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(c_grid, 1) |
+                tensorstore::Dims(z_dim).SizedInterval(z, 1) |
+                tensorstore::Dims(y_dim).SizedInterval(y_grid * whole_image._chunk_size_y + y_spacing, image_height) |
+                tensorstore::Dims(x_dim).SizedInterval(x_grid * whole_image._chunk_size_x + x_spacing, image_width)).value();
+            } else if (v == VisType::Viv) {
+              transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(c_grid, 1) |
+                tensorstore::Dims(z_dim).SizedInterval(z, 1) |
+                tensorstore::Dims(y_dim).SizedInterval(y_grid * whole_image._chunk_size_y + y_spacing, image_height) |
+                tensorstore::Dims(x_dim).SizedInterval(x_grid * whole_image._chunk_size_x + x_spacing, image_width)).value();
+            }
+            tensorstore::Write(array, dest | transform).value();
+            }
         });
       }
 
