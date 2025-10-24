@@ -20,12 +20,12 @@ using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 namespace argolid {
-PyramidCompositor::PyramidCompositor(const std::string& input_pyramids_loc, const std::string& out_dir, const std::string& output_pyramid_name): 
-    _input_pyramids_loc(input_pyramids_loc),
+PyramidCompositor::PyramidCompositor(const std::string& out_dir, const std::string& output_pyramid_name): 
     _output_pyramid_name(std::filesystem::path(out_dir) / output_pyramid_name),
     _ome_metadata_file(out_dir + "/" + output_pyramid_name + "/METADATA.ome.xml"),
     _pyramid_levels(-1),
-    _num_channels(-1) {}
+    _num_channels(-1),
+    _num_z_slices(-1) {}
 
 
 void PyramidCompositor::create_xml() {
@@ -153,6 +153,7 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
 
     // Compute ranges in global coordinates
     auto image_shape = _zarr_arrays[level].domain().shape();
+    auto num_z_slices = image_shape[_z_index];
     int y_start = y_index * CHUNK_SIZE;
     int y_end = std::min((y_index + 1) * CHUNK_SIZE, (int)image_shape[3]);
     int x_start = x_index * CHUNK_SIZE;
@@ -171,28 +172,30 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
 
     //int row, local_y_start, tile_y_start, tile_y_dim, tile_y_end, col_start_pos;
     //int col, local_x_start, tile_x_start, tile_x_dim, tile_x_end;
-    while (row_start_pos < y_end) {
 
-        int row = row_start_pos / unit_image_height;
-        int local_y_start = row_start_pos - y_start;
-        int tile_y_start = row_start_pos - row * unit_image_height;
-        int tile_y_dim = std::min((row + 1) * unit_image_height - row_start_pos, y_end - row_start_pos);
-        int tile_y_end = tile_y_start + tile_y_dim;
+    for (int layer = 0; layer < num_z_slices; ++layer){ 
+        while (row_start_pos < y_end) {
+            int row = row_start_pos / unit_image_height;
+            int local_y_start = row_start_pos - y_start;
+            int tile_y_start = row_start_pos - row * unit_image_height;
+            int tile_y_dim = std::min((row + 1) * unit_image_height - row_start_pos, y_end - row_start_pos);
+            int tile_y_end = tile_y_start + tile_y_dim;
 
-        int col_start_pos = x_start;
+            int col_start_pos = x_start;
 
-        while (col_start_pos < x_end) {
+            while (col_start_pos < x_end) {
 
-            int col = col_start_pos / unit_image_width;
-            int local_x_start = col_start_pos - x_start;
-            int tile_x_start = col_start_pos - col * unit_image_width;
-            int tile_x_dim = std::min((col + 1) * unit_image_width - col_start_pos, x_end - col_start_pos);
-            int tile_x_end = tile_x_start + tile_x_dim;
-
-            _th_pool.detach_task([ 
+                int col = col_start_pos / unit_image_width;
+                int local_x_start = col_start_pos - x_start;
+                int tile_x_start = col_start_pos - col * unit_image_width;
+                int tile_x_dim = std::min((col + 1) * unit_image_width - col_start_pos, x_end - col_start_pos);
+                int tile_x_end = tile_x_start + tile_x_dim;
+                
+                _th_pool.detach_task([ 
                 row,
                 col,
                 channel,
+                layer,
                 level,
                 x_start,
                 x_end,
@@ -237,11 +240,12 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
                 Seq rows = Seq(y_start, y_end);
                 Seq cols = Seq(x_start, x_end); 
                 Seq tsteps = Seq(0, 0);
-                Seq channels = Seq(channel-1, channel); 
-                Seq layers = Seq(0, 0);
+                Seq channels = Seq(channel, channel); 
+                Seq layers = Seq(layer, layer);
             
                 read_transform = (std::move(read_transform) | tensorstore::Dims(_y_index).ClosedInterval(rows.Start(), rows.Stop()-1) |
-                                                            tensorstore::Dims(_x_index).ClosedInterval(cols.Start(), cols.Stop()-1)).value();
+                                                            tensorstore::Dims(_x_index).ClosedInterval(cols.Start(), cols.Stop()-1) |
+                                                            tensorstore::Dims(_z_index).ClosedInterval(layer, layer)).value();
 
                 tensorstore::Read(source | read_transform, tensorstore::UnownedToShared(array)).value();
 
@@ -255,22 +259,23 @@ void PyramidCompositor::_write_zarr_chunk(int level, int channel, int y_index, i
             });
 
             col_start_pos += tile_x_end - tile_x_start;
-        }
+            }
         row_start_pos += tile_y_end - tile_y_start;
+        }
+
+        // wait for threads to finish assembling vector before writing
+        _th_pool.wait();
+
+        WriteImageData(
+            _zarr_arrays[level],
+            assembled_image_vec,  // Access the data from the std::shared_ptr
+            Seq(y_start, y_end), 
+            Seq(x_start, x_end), 
+            Seq(layer, layer), 
+            Seq(channel, channel), 
+            Seq(0, 0)
+        );
     }
-
-    // wait for threads to finish assembling vector before writing
-    _th_pool.wait();
-
-    WriteImageData(
-        _zarr_arrays[level],
-        assembled_image_vec,  // Access the data from the std::shared_ptr
-        Seq(y_start, y_end), 
-        Seq(x_start, x_end), 
-        Seq(0, 0), 
-        Seq(channel, channel), 
-        Seq(0, 0)
-    );
 }
 
 void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int, int, int>, std::string, TupleHash>& comp_map) {
@@ -319,6 +324,8 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
                         image_shape[image_shape.size()-2],
                         image_shape[image_shape.size()-1]
                     };
+
+                    _num_z_slices = image_shape[_z_index];
                 });
             }
             break;
@@ -348,7 +355,7 @@ void PyramidCompositor::set_composition(const std::unordered_map<std::tuple<int,
         _plate_image_shapes[level] = std::vector<std::int64_t> {
             1,
             _num_channels,
-            1,
+            _num_z_slices,
             num_rows * shape.first,
             num_cols * shape.second
         };
@@ -409,7 +416,8 @@ void PyramidCompositor::WriteImageData(
 
     auto output_transform = tensorstore::IdentityTransform(source.domain());
 
-    output_transform = (std::move(output_transform) | tensorstore::Dims(_c_index).ClosedInterval(channels.value().Start(), channels.value().Stop())).value();
+    output_transform = (std::move(output_transform) | tensorstore::Dims(_c_index).ClosedInterval(channels.value().Start(), channels.value().Stop()) |
+                                                      tensorstore::Dims(_z_index).ClosedInterval(layers.value().Start(), layers.value().Stop())).value();
 
     output_transform = (std::move(output_transform) | tensorstore::Dims(_y_index).ClosedInterval(rows.Start(), rows.Stop()-1) |
                                                       tensorstore::Dims(_x_index).ClosedInterval(cols.Start(), cols.Stop()-1)).value();

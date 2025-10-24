@@ -15,7 +15,7 @@ enum class DSType {Mean, Mode_Max, Mode_Min};
 
 struct ImageInfo
 {
-  std::int64_t _full_image_height, _full_image_width, _chunk_size_x, _chunk_size_y, _num_channels;
+  std::int64_t _full_image_height, _full_image_width, _chunk_size_x, _chunk_size_y, _num_channels, _num_z_slices;
   std::string _data_type;
 };
 
@@ -48,14 +48,14 @@ void WriteMultiscaleMetadataForImageCollection(const std::string& image_file_nam
 void GenerateOmeXML(const std::string& image_name, const std::string& output_file, ImageInfo& whole_image);
 void WriteMultiscaleMetadataForSingleFile( const std::string& input_file , const std::string& output_dir, 
                                                                     int min_level, int max_level, VisType v);
-inline std::tuple<int,int,int,int> GetZarrParams(VisType v){
-  // returns {x_dim_index, y_dim_index, c_dim_index, num_dims}
+inline std::tuple<int,int,int,int,int> GetZarrParams(VisType v){
+  // returns {x_dim_index, y_dim_index, z_dim_index, c_dim_index, num_dims}
   if (v == VisType::Viv){ //5D file
-    return {4,3,1,5};
+    return {4,3,2,1,5};
   } else if (v == VisType::NG_Zarr ){ // 3D file
-    return {3,2,0,4};
+    return {3,2,1,0,4};
   } else if (v == VisType::PCNG ){ // 3D file
-    return {0,1,3,3};
+    return {0,1,2,3,3};
   }
 }
 
