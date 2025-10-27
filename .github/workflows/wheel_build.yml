@@ -64,10 +64,10 @@ jobs:
                                    cp -r local_install /tmp/argolid_bld
           CIBW_BEFORE_ALL_WINDOWS: ci-utils\install_prereq_win.bat &&
                                    xcopy /E /I /y local_install C:\TEMP\argolid_bld\local_install 
-          CIBW_ENVIRONMENT_MACOS: REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install"
-          CIBW_ENVIRONMENT_LINUX: LD_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64:$LD_LIBRARY_PATH" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install" 
+          CIBW_ENVIRONMENT_MACOS: REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install" PIP_ONLY_BINARY=":all:"
+          CIBW_ENVIRONMENT_LINUX: LD_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64:$LD_LIBRARY_PATH" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install" PIP_ONLY_BINARY=":all:"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-listdeps {wheel} && DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel}
-          CIBW_ENVIRONMENT_WINDOWS: PATH="$TEMP\\argolid\\bin;$PATH" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="C:\\TEMP\\argolid_bld\\local_install" CMAKE_ARGS="-DCMAKE_GENERATOR=Ninja"
+          CIBW_ENVIRONMENT_WINDOWS: PATH="$TEMP\\argolid\\bin;$PATH" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="C:\\TEMP\\argolid_bld\\local_install" CMAKE_ARGS="-DCMAKE_GENERATOR=Ninja" PIP_ONLY_BINARY=":all:"
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_BEFORE_TEST_LINUX: sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo &&
@@ -123,7 +123,7 @@ jobs:
                                   mkdir -p /tmp/argolid_bld &&
                                   cp -r local_install /tmp/argolid_bld
                             
-          CIBW_ENVIRONMENT_MACOS: REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install" CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON"
+          CIBW_ENVIRONMENT_MACOS: REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install" CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON" PIP_ONLY_BINARY=":all:"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-listdeps {wheel} && DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel}
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_TEST_REQUIRES: bfio tensorstore numpy
