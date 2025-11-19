@@ -118,9 +118,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: 3
           CIBW_ARCHS_MACOS: arm64
           CIBW_BEFORE_ALL_MACOS:  brew install nasm &&
-                                  brew install llvm@16 &&
                                   brew uninstall --ignore-dependencies jpeg-turbo &&
-                                  sudo xcode-select -s /Applications/Xcode_15.4.app &&
                                   bash ci-utils/install_prereq_linux.sh &&
                                   mkdir -p /tmp/argolid_bld &&
                                   cp -r local_install /tmp/argolid_bld
