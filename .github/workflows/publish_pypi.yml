@@ -74,7 +74,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel}"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_BEFORE_TEST_LINUX: dnf -y install maven java
-          CIBW_TEST_REQUIRES: bfio tensorstore numpy
+          CIBW_TEST_REQUIRES: bfio>=2.4.0 tensorstore numpy
           CIBW_TEST_COMMAND: python -W default -m unittest discover -s {project}/tests -v
 
       - name: Install Dependencies
@@ -134,7 +134,7 @@ jobs:
             DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-listdeps {wheel} &&
             MACOSX_DEPLOYMENT_TARGET=11.0 DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel} -e libc++ -e libunwind
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
-          CIBW_TEST_REQUIRES: bfio tensorstore numpy
+          CIBW_TEST_REQUIRES: bfio>=2.4.0 tensorstore numpy
           CIBW_TEST_COMMAND: python -W default -m unittest discover -s {project}/tests -v
 
       - name: Install Dependencies
