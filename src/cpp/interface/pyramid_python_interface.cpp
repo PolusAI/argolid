@@ -20,7 +20,7 @@ PYBIND11_MODULE(libargolid, m) {
 
 
     py::class_<argolid::PyramidCompositor>(m, "PyramidCompositorCPP") \
-    .def(py::init<const std::string&, const std::string&, const std::string&>()) \
+    .def(py::init<const std::string&, const std::string&>()) \
     .def("reset_composition", &argolid::PyramidCompositor::reset_composition) \
     .def("create_xml", &argolid::PyramidCompositor::create_xml) \
     .def("create_zattr_file", &argolid::PyramidCompositor::create_zattr_file) \

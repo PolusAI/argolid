@@ -17,17 +17,16 @@ class PyramidCompositor:
     """
 
     def __init__(
-        self, input_pyramids_loc: str, out_dir: str, output_pyramid_name: str
+        self, out_dir: str, output_pyramid_name: str
     ) -> None:
         """
         Initializes the PyramidCompositor object.
 
         Args:
-            input_pyramids_loc (str): The location of the input pyramid images.
             out_dir (str): The output directory for the composed zarr pyramid file.
             output_pyramid_name (str): The name of the zarr pyramid file.
         """
-        self._pyramid_compositor_cpp = PyramidCompositorCPP(input_pyramids_loc, out_dir, output_pyramid_name)
+        self._pyramid_compositor_cpp = PyramidCompositorCPP(out_dir, output_pyramid_name)
 
     def _create_xml(self) -> None:
         """

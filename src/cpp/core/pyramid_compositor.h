@@ -30,7 +30,7 @@ class Seq
 class PyramidCompositor {
 public:
 
-    PyramidCompositor(const std::string& well_pyramid_loc, const std::string& out_dir, const std::string& pyramid_file_name);
+    PyramidCompositor(const std::string& out_dir, const std::string& pyramid_file_name);
 
     void reset_composition();
 
@@ -58,7 +58,6 @@ private:
         const std::optional<Seq>& channels,
         const std::optional<Seq>& tsteps);
 
-    std::string _input_pyramids_loc;
     std::filesystem::path _output_pyramid_name;
     std::string _ome_metadata_file;
 
@@ -74,7 +73,7 @@ private:
 
     std::set<std::tuple<int, int, int, int>> _chunk_cache;
     int _pyramid_levels;
-    int _num_channels;
+    int _num_channels, _num_z_slices;
 
     tensorstore::DataType _image_ts_dtype;
     std::string _image_dtype;
@@ -83,6 +82,8 @@ private:
     int _x_index = 4;
     int _y_index = 3;
     int _c_index = 1;
+    int _z_index = 2;
+    int _t_index = 0;
 
     BS::thread_pool<BS::tp::none> _th_pool;
 };

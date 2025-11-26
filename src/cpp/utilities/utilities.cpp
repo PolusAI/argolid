@@ -348,8 +348,16 @@ void GenerateOmeXML(const std::string& image_name, const std::string& output_fil
     pixelsNode.append_attribute("SizeT") = "1";
     pixelsNode.append_attribute("SizeX") = std::to_string(whole_image._full_image_width).c_str();
     pixelsNode.append_attribute("SizeY") = std::to_string(whole_image._full_image_height).c_str();
-    pixelsNode.append_attribute("SizeZ") = "1";
-    pixelsNode.append_attribute("Type") = whole_image._data_type.c_str();
+    pixelsNode.append_attribute("SizeZ") = std::to_string(whole_image._num_z_slices).c_str();
+    
+    auto datatype = whole_image._data_type.c_str();
+    if (datatype == std::string_view{"float32"}) {
+        pixelsNode.append_attribute("Type") = "float";
+    } else if (datatype == std::string_view{"float64"}) {
+        pixelsNode.append_attribute("Type") = "double";
+    } else {
+        pixelsNode.append_attribute("Type") =datatype; 
+    }
 
     // Create the <Channel> elements
     for(std::int64_t i=0; i<whole_image._num_channels; ++i){
