@@ -1,14 +1,14 @@
 import os
 import re
 import sys
-import versioneer
 import platform
 import subprocess
 
-from distutils.version import LooseVersion
+from looseversion import LooseVersion
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
 
+import versioneer
 
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=""):
