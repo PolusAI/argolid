@@ -568,3 +568,5 @@ scratch/
 build/
 build_man/
 venv/
+CmakeFiles
+CMakeCache.txt

@@ -47,7 +47,7 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
     int base_level_key = 0;
     PLOG_INFO << "Assembling base image...";
     auto whole_image =_tiff_coll_to_chunk.Assemble(collection_path, stitch_vector_file, chunked_file_dir, std::to_string(base_level_key), v, _th_pool);
-    int max_level = static_cast<int>(ceil(log2(std::max({whole_image._full_image_width, whole_image._full_image_width}))));
+    int max_level = static_cast<int>(ceil(log2(std::max({whole_image._full_image_width, whole_image._full_image_height}))));
     int min_level = static_cast<int>(ceil(log2(min_dim)));
     auto max_level_key = max_level-min_level+1+base_level_key;
     PLOG_INFO << "Generating image pyramids...";

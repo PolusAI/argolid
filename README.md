@@ -25,7 +25,7 @@ git clone https://github.com/polusai/argolid.git
 cd argolid
 mkdir build_deps
 cd build_deps
-sh ../ci-utils/install_prereq_linux.sh # only linux better use bash instead of sh
+sh ../ci-utils/install_prereq_linux.sh # on linux prefer bash over sh
 cd ../
 export ARGOLID_DEP_DIR=./build_deps/local_install
 python setup.py install
