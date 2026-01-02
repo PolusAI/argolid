@@ -248,12 +248,12 @@ void WriteTSZattrFilePlateImage(
 }
 
 void WriteVivZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc, int min_level, int max_level){
-    
     json scale_metadata_list = json::array();
-    for(int i=min_level; i<=max_level; ++i){
-        json scale_metadata;
-        scale_metadata["path"] = std::to_string(i);
-        scale_metadata_list.push_back(scale_metadata);
+
+    for (int i = min_level; i <= max_level; ++i) {
+        scale_metadata_list.emplace_back(json{
+            {"path", std::to_string(i)}
+        });
     }
 
     json combined_metadata;

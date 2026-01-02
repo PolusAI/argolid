@@ -1,6 +1,17 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Dict, Optional, List
+from enum import IntEnum
 from .libargolid import OmeTiffToChunkedPyramidCPP, VisType, DSType, PyramidViewCPP
+
+class LogLevel(IntEnum):
+    NONE    = 0
+    FATAL   = 1
+    ERROR   = 2
+    WARNING = 3
+    INFO    = 4
+    DEBUG   = 5
+    VERBOSE = 6
+
 
 class Downsample(BaseModel):
     channel_name: str
@@ -10,7 +21,7 @@ class Downsample(BaseModel):
     def check_method_config(cls, v):
         if v not in {"mean", "mode_max", "mode_min"}:
             raise ValueError(f'Value must be "mean", mode_max or "mode_min".')
-        return v       
+        return v
 
 class PlateVisualizationMetadata(BaseModel):
     output_type: str
@@ -32,10 +43,11 @@ class PlateVisualizationMetadata(BaseModel):
         return v
 
 class PyramidGenerartor:
-    def __init__(self, log_level = None) -> None:
+    def __init__(self, log_level = LogLevel.NONE) -> None:
         self._pyr_generator = OmeTiffToChunkedPyramidCPP()
         self.vis_types_dict ={ "NG_Zarr" : VisType.NG_Zarr, "PCNG" : VisType.PCNG, "Viv" : VisType.Viv}
         self.ds_types_dict = {"mean" : DSType.Mean, "mode_max" : DSType.Mode_Max, "mode_min" : DSType.Mode_Min}
+        self._pyr_generator.SetLogLevel(log_level)
 
     def generate_from_single_image(self, input_file, output_dir, min_dim, vis_type, ds_dict = {}):
         

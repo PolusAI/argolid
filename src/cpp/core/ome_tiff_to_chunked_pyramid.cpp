@@ -1,5 +1,6 @@
 #include "ome_tiff_to_chunked_pyramid.h"
 #include <filesystem>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
@@ -47,6 +48,15 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
     int base_level_key = 0;
     PLOG_INFO << "Assembling base image...";
     auto whole_image =_tiff_coll_to_chunk.Assemble(collection_path, stitch_vector_file, chunked_file_dir, std::to_string(base_level_key), v, _th_pool);
+
+    if (whole_image._full_image_height <= 0 ||
+        whole_image._full_image_width  <= 0) {
+            PLOG_WARNING << "Assembled image height and width must be positive "
+            << "(height=" + std::to_string(whole_image._full_image_height) + ", width="  + std::to_string(whole_image._full_image_width) + ")\n"
+            << "No (tiff) images images found in the collection_path : " + collection_path + " please check the path"
+            << "\n";
+        return;
+    }
     int max_level = static_cast<int>(ceil(log2(std::max({whole_image._full_image_width, whole_image._full_image_height}))));
     int min_level = static_cast<int>(ceil(log2(min_dim)));
     auto max_level_key = max_level-min_level+1+base_level_key;
