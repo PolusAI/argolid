@@ -66,7 +66,7 @@ ImageInfo OmeTiffCollToChunked::Assemble(const std::string& input_dir,
   int grid_x_max = 0, grid_y_max = 0, grid_c_max = 0;
   int grid_x_min = INT_MAX, grid_y_min = INT_MAX, grid_c_min = INT_MAX;
   std::vector<ImageSegment> image_vec;
-  ImageInfo whole_image;
+  ImageInfo whole_image {};
 
   auto fp = std::make_unique<FilePattern> (input_dir, pattern);
   auto files = fp->getFiles();
@@ -163,22 +163,34 @@ ImageInfo OmeTiffCollToChunked::Assemble(const std::string& input_dir,
                 array).value();
 
           tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-          if(v == VisType::PCNG){
-            transform = (std::move(transform) | tensorstore::Dims("z", "channel").IndexSlice({z, i._c_grid-grid_c_min}) 
-                                              | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
-                                              | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)
-                                              | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
+          auto yy = (i._y_grid - grid_y_min) * whole_image._chunk_size_y;
+          auto xx = (i._x_grid - grid_x_min) * whole_image._chunk_size_x;
+          auto cc = (i._c_grid - grid_c_min);
 
-          } else if (v == VisType::NG_Zarr){
-            transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid-grid_c_min, 1) 
-                                              | tensorstore::Dims(z_dim).SizedInterval(z, 1) 
-                                              | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
-                                              | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)).value();
-          } else if (v == VisType::Viv){
-            transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid-grid_c_min, 1) 
-                                              | tensorstore::Dims(z_dim).SizedInterval(z, 1)
-                                              | tensorstore::Dims(y_dim).SizedInterval((i._y_grid-grid_y_min)*whole_image._chunk_size_y, image_height) 
-                                              | tensorstore::Dims(x_dim).SizedInterval((i._x_grid-grid_x_min)*whole_image._chunk_size_x, image_width)).value();
+          switch (v) {
+            case VisType::PCNG:
+              transform =
+                  (std::move(transform)
+                  | tensorstore::Dims("z", "channel").IndexSlice({z, cc})
+                  | tensorstore::Dims(y_dim).SizedInterval(yy, image_height)
+                  | tensorstore::Dims(x_dim).SizedInterval(xx, image_width)
+                  | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim}))
+                      .value();
+              break;
+
+            case VisType::NG_Zarr:  // same as Viv
+            case VisType::Viv:
+              transform =
+                  (std::move(transform)
+                  | tensorstore::Dims(c_dim).SizedInterval(cc, 1)
+                  | tensorstore::Dims(z_dim).SizedInterval(z, 1)
+                  | tensorstore::Dims(y_dim).SizedInterval(yy, image_height)
+                  | tensorstore::Dims(x_dim).SizedInterval(xx, image_width))
+                      .value();
+              break;
+
+            default:
+              throw std::invalid_argument("Unsupported VisType");
           }
           tensorstore::Write(array, dest | transform).value();
         });

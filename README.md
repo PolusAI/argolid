@@ -20,14 +20,14 @@ Here is an example of building and installing `Argolid` in a Python virtual envi
 ```
 python -m virtualenv venv
 source venv/bin/activate
-pip install cmake
-git clone https://github.com/sameeul/argolid.git 
+pip install cmake setuptools looseversion
+git clone https://github.com/polusai/argolid.git 
 cd argolid
 mkdir build_deps
 cd build_deps
-sh ../ci_utils/install_prereq_linux.sh
+sh ../ci-utils/install_prereq_linux.sh # on linux prefer bash over sh
 cd ../
-export ARGOLID_DER_DIR=./build_deps/local_install
+export ARGOLID_DEP_DIR=./build_deps/local_install
 python setup.py install
 ```
 
