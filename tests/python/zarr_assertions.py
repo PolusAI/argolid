@@ -43,7 +43,6 @@ def find_argolid_root(out_dir: Path) -> Path:
         return candidates[0]
 
     if len(candidates) > 1:
-        # deterministic choice, newest wins
         return max(candidates, key=lambda p: p.stat().st_mtime)
 
     raise FileNotFoundError(
@@ -85,7 +84,7 @@ def assert_is_argolid_omexml_zarr_pyramid(out_dir: Path, expect_levels: int | No
     series0 = data["0"]
     assert isinstance(series0, zarr.Group)
 
-    # levels can be arrays or groups, depending on how the writer stored them
+    # levels can be arrays or groups
     level_names = sorted(
         [k for k in series0.keys() if str(k).isdigit()],
         key=lambda s: int(s),
@@ -122,7 +121,6 @@ def assert_is_argolid_omexml_zarr_pyramid(out_dir: Path, expect_levels: int | No
 
         raise AssertionError(f"Unexpected type at level {lvl}: {type(node)}")
 
-    # after shapes computed:
     assert shapes, "No shapes collected from pyramid levels"
     y0, x0 = shapes[0][-2], shapes[0][-1]
     assert y0 > 0 and x0 > 0, "Each array must have non-zero shape"

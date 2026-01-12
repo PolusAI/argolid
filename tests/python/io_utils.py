@@ -8,7 +8,7 @@ import subprocess
 class PolusTestDataRepo:
     repo_url: str = "https://github.com/sameeul/polus-test-data.git"
     repo_dir: Path = Path("polus-test-data")
-    default_branch: str = "main"  # used only if you later add pull/update logic
+    default_branch: str = "main"
 
 
 def ensure_repo_cloned(repo: PolusTestDataRepo, depth: int = 1) -> Path:

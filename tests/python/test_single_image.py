@@ -23,10 +23,8 @@ def test_single_image_pyramid(tmp_path: Path) -> None:
     )
 
     shapes = assert_is_argolid_omexml_zarr_pyramid(out_dir, expect_levels=2)
-    shapes = assert_is_argolid_omexml_zarr_pyramid(out_dir, expect_levels=2)
 
     # ensure at least one spatial dimension shrinks between level 0 and 1
     y0, x0 = shapes[0][-2], shapes[0][-1]
     y1, x1 = shapes[1][-2], shapes[1][-1]
     assert (y1 < y0) or (x1 < x0), f"Expected level 1 to be downsampled vs level 0, got L0={shapes[0]} L1={shapes[1]}"
-
