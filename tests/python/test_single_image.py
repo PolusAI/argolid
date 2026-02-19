@@ -18,7 +18,7 @@ def test_single_image_pyramid(tmp_path: Path) -> None:
 
     generate_pyramid_from_repo_file(
         repo=repo,
-        rel_image_path=Path("argolid") / "x0_y0_c1.ome.tiff",
+        rel_image_path=Path("argolid") / "2D" / "x0_y0_c1.ome.tiff",
         output_dir=out_dir,
     )
 

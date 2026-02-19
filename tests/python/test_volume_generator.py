@@ -3,25 +3,27 @@ from pathlib import Path
 import pytest
 
 from argolid import VolumeGenerator
+from .io_utils import ensure_repo_cloned, PolusTestDataRepo
 
 
 @pytest.mark.parametrize(
-    "rel_input_dir,file_pattern,output_dir,image_name,group_by",
+    "file_pattern,output_dir,image_name,group_by",
     [
-        ("3D", "{z:d}.c{c:d}.ome.tiff", "3D_pyramid_full", "test_volume", "c"),
+        ("{z:d}.c{c:d}.ome.tiff", "volume_full", "test_volume", "c"),
     ],
 )
 def test_generate_volume_creates_output(
     tmp_path: Path,
-    rel_input_dir: str,
     file_pattern: str,
     output_dir: str,
     image_name: str,
     group_by: str,
 ) -> None:
-    # Resolve input directory relative to THIS test file
-    tests_dir = Path(__file__).resolve().parent
-    input_dir = tests_dir / rel_input_dir
+
+    repo = PolusTestDataRepo()
+    repo_dir = ensure_repo_cloned(repo)
+
+    input_dir = repo_dir / "argolid" / "3D"
     assert input_dir.is_dir(), f"Missing test data dir: {input_dir}"
 
     out_dir = tmp_path / output_dir
