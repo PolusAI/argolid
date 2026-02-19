@@ -4,6 +4,14 @@ project(TensorStorePrebuild)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Use ccache if available to speed up repeated TensorStore compilation in CI
+find_program(CCACHE_EXECUTABLE ccache)
+if(CCACHE_EXECUTABLE)
+    message(STATUS "ccache found: ${CCACHE_EXECUTABLE}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_EXECUTABLE}" CACHE STRING "" FORCE)
+    set(CMAKE_C_COMPILER_LAUNCHER   "${CCACHE_EXECUTABLE}" CACHE STRING "" FORCE)
+endif()
+
 include(FetchContent)
 
 # Keep URL + SHA256 in sync with root CMakeLists.txt

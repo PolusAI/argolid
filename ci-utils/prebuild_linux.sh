@@ -15,6 +15,12 @@ tar -xjf nasm.tar.bz2
 cd nasm-2.15.05 && ./configure && make -j"$(nproc)" && make install
 cd /project
 
+# Install ccache and point it at the workspace-mounted cache dir
+dnf install -y ccache
+mkdir -p /project/ccache_dir
+export CCACHE_DIR=/project/ccache_dir
+export CCACHE_MAXSIZE=5G
+
 # Build zlib, libjpeg-turbo, libpng to /usr/local (needed for TENSORSTORE_USE_SYSTEM_* flags)
 bash ci-utils/install_sys_deps_linux.sh
 

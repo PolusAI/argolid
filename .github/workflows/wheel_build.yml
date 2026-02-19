@@ -38,8 +38,17 @@ jobs:
           path: ts_fc_cache
           key: ts-fc-ubuntu-22.04-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
 
+      - name: Restore ccache
+        id: ccache
+        uses: actions/cache@v4
+        with:
+          path: ccache_dir
+          key: ccache-linux-auto64-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-auto64-
+
       - name: Run Linux prebuild in manylinux container
-        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true'
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true' || steps.ccache.outputs.cache-hit != 'true'
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/project \
@@ -188,6 +197,15 @@ jobs:
           path: ts_fc_cache
           key: ts-fc-ubuntu-22.04-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ccache_dir
+          key: ccache-linux-auto64-${{ github.sha }}-${{ matrix.cibw_build }}
+          restore-keys: |
+            ccache-linux-auto64-${{ github.sha }}
+            ccache-linux-auto64-
+
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
@@ -207,6 +225,8 @@ jobs:
             LD_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64:$LD_LIBRARY_PATH"
             ON_GITHUB="TRUE"
             ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install"
+            CCACHE_DIR=/project/ccache_dir
+            CCACHE_MAXSIZE=5G
             CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON -DTENSORSTORE_USE_SYSTEM_ZLIB=ON -DTENSORSTORE_USE_SYSTEM_PNG=ON -DFETCHCONTENT_BASE_DIR=/project/ts_fc_cache"
           CIBW_ARCHS: auto64
           CIBW_BEFORE_TEST_LINUX: dnf -y install maven java

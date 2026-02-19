@@ -15,6 +15,9 @@ tar -xjf nasm.tar.bz2
 cd nasm-2.15.05 && ./configure && make -j"$(nproc)" && make install
 cd /project
 
+# Install ccache (CCACHE_DIR and CCACHE_MAXSIZE are set via CIBW_ENVIRONMENT_LINUX)
+dnf install -y ccache
+
 mkdir -p /tmp/argolid_bld
 
 if [ -d "/project/prereq_cache/local_install" ]; then
