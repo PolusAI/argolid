@@ -278,9 +278,9 @@ jobs:
           CIBW_BUILD: ${{ matrix.cibw_build }}
           CIBW_BUILD_VERBOSITY: 3
           CIBW_BEFORE_ALL_MACOS: brew install nasm &&
+                          bash ci-utils/before_all_macos.sh &&
                           brew uninstall --ignore-dependencies openssl || true &&
-                          sudo rm -rf /usr/local/include/openssl &&
-                          bash ci-utils/before_all_macos.sh
+                          sudo rm -rf /usr/local/include/openssl
           CIBW_ENVIRONMENT_MACOS: >-
             MACOSX_DEPLOYMENT_TARGET=11.0
             REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64"
