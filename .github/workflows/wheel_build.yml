@@ -97,12 +97,12 @@ jobs:
         if: (steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true') && matrix.os == 'windows-latest'
         shell: cmd
         run: |
-          ci-utils\install_prereq_win.bat
+          call ci-utils\install_prereq_win.bat
           if %errorlevel% neq 0 exit /b %errorlevel%
           xcopy /E /I /y local_install prereq_cache\local_install
           cmake -S ci-utils\tensorstore_prebuild -B C:\ts_cmake_prebuild -DCMAKE_GENERATOR=Ninja -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache -DCMAKE_BUILD_TYPE=Release
           if %errorlevel% neq 0 exit /b %errorlevel%
-          cmake --build C:\ts_cmake_prebuild
+          cmake --build C:\ts_cmake_prebuild --parallel
           if %errorlevel% neq 0 exit /b %errorlevel%
 
   # ──────────────────────────────────────────────────────────────────────────

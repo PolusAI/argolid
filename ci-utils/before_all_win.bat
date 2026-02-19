@@ -13,7 +13,12 @@ if exist prereq_cache\local_install (
     )
 ) else (
     echo =^> Prereq cache miss: building filepattern + pybind11 from scratch
-    ci-utils\install_prereq_win.bat
+    call ci-utils\install_prereq_win.bat
     if errorlevel 1 exit 1
     xcopy /E /I /y local_install C:\TEMP\argolid_bld\local_install
+    REM Explicitly copy DLLs to PATH location (don't rely on install_prereq_win.bat's
+    REM conditional copy which requires ON_GITHUB to be already set)
+    if exist local_install\bin (
+        xcopy /E /I /y local_install\bin %TEMP%\argolid\bin
+    )
 )
