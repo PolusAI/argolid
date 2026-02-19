@@ -1,8 +1,16 @@
 #!/bin/bash
-# Usage: $bash install_prereq_linux.sh $INSTALL_DIR
+# Usage: bash install_prereq_linux.sh [$INSTALL_DIR] [--skip-sys-deps]
 # Default $INSTALL_DIR = ./local_install
+# --skip-sys-deps: skip building zlib, libjpeg-turbo, libpng (use when already installed)
 #
-if [ -z "$1" ]
+SKIP_SYS_DEPS=false
+for arg in "$@"; do
+    case "$arg" in
+        --skip-sys-deps) SKIP_SYS_DEPS=true ;;
+    esac
+done
+
+if [ -z "$1" ] || [ "$1" = "--skip-sys-deps" ]
 then
       echo "No path to the Argolid source location provided"
       echo "Creating local_install directory"
@@ -34,14 +42,15 @@ make install -j4
 cd ../../
 
 
+if [ "$SKIP_SYS_DEPS" != "true" ]; then
 curl -L https://github.com/madler/zlib/releases/download/v1.3.1/zlib131.zip -o zlib131.zip
 unzip zlib131.zip
 cd zlib-1.3.1
 mkdir build_man
 cd build_man
-cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=/usr/local ..  
-cmake --build . 
-cmake --build . --target install 
+cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=/usr/local ..
+cmake --build .
+cmake --build . --target install
 cd ../../
 
 curl -L https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/3.1.0.zip -o 3.1.0.zip
@@ -67,3 +76,4 @@ cd build_man
 cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=/usr/local ..
 make install -j4
 cd ../../
+fi
