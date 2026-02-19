@@ -562,8 +562,13 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# scratch 
+# scratch
 scratch/
+
+# CI build caches (populated by prebuild job, restored by wheel-build jobs)
+prereq_cache/
+ts_fc_cache/
+ccache_dir/
 
 build/
 build_man/

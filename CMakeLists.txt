@@ -36,12 +36,21 @@ set(SOURCE
            src/cpp/utilities/utilities.cpp
 )
 
+# Use ccache if available to speed up repeated TensorStore compilation in CI
+find_program(CCACHE_EXECUTABLE ccache)
+if(CCACHE_EXECUTABLE)
+    message(STATUS "ccache found: ${CCACHE_EXECUTABLE}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_EXECUTABLE}" CACHE STRING "" FORCE)
+    set(CMAKE_C_COMPILER_LAUNCHER   "${CCACHE_EXECUTABLE}" CACHE STRING "" FORCE)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
   tensorstore
   URL "https://github.com/google/tensorstore/archive/refs/tags/v0.1.80.tar.gz"
   URL_HASH SHA256=94866de34b6139d77d30e828a50f9e8df98e7dd68e848393470879aeb50ea7bf
+  FIND_PACKAGE_ARGS
 )
 
 # Additional FetchContent_Declare calls as needed...

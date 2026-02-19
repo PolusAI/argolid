@@ -9,84 +9,226 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
+  # ──────────────────────────────────────────────────────────────────────────
+  # Stage 1 — Prebuild jobs (one per OS/arch, run in parallel)
+  #   Each populates two caches:
+  #     prereq_cache/ — filepattern + pybind11
+  #     ts_fc_cache/  — TensorStore FetchContent source tree
+  #   Wheel-build jobs below depend only on their matching prebuild job,
+  #   so each OS starts building wheels as soon as its own prebuild is done.
+  # ──────────────────────────────────────────────────────────────────────────
 
-    env:
-      MACOSX_DEPLOYMENT_TARGET: "10.15"
+  prebuild_linux:
+    name: Prebuild (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Restore prereq cache
+        id: prereq-cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-ubuntu-22.04-auto64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        id: ts-cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-ubuntu-22.04-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
+
+      - name: Restore ccache
+        id: ccache
+        uses: actions/cache@v4
+        with:
+          path: ccache_dir
+          key: ccache-linux-auto64-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-auto64-
+
+      - name: Run Linux prebuild in manylinux container
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true' || steps.ccache.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/project \
+            -w /project \
+            quay.io/pypa/manylinux_2_28_x86_64 \
+            bash ci-utils/prebuild_linux.sh
+
+  prebuild_macos_intel:
+    name: Prebuild (macOS intel)
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Restore prereq cache
+        id: prereq-cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-macos-15-intel-auto64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        id: ts-cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-macos-15-intel-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
+
+      - name: Run macOS intel prebuild
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true'
+        run: |
+          brew install nasm
+          brew uninstall --ignore-dependencies openssl || true
+          sudo rm -rf /usr/local/include/openssl
+          bash ci-utils/install_prereq_linux.sh ./prereq_cache/local_install
+          cmake -S ci-utils/tensorstore_prebuild -B /tmp/ts_cmake_prebuild \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTENSORSTORE_USE_SYSTEM_JPEG=ON \
+            -DTENSORSTORE_USE_SYSTEM_ZLIB=ON \
+            -DTENSORSTORE_USE_SYSTEM_PNG=ON \
+            -DCMAKE_CXX_FLAGS=-Wno-missing-template-arg-list-after-template-kw \
+            -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache
+          cmake --build /tmp/ts_cmake_prebuild -j$(sysctl -n hw.ncpu)
+
+  prebuild_windows:
+    name: Prebuild (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Restore prereq cache
+        id: prereq-cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-windows-latest-auto64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        id: ts-cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-windows-latest-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Add NASM
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Add Ninja
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true'
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Run Windows prebuild
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true'
+        shell: cmd
+        run: |
+          call ci-utils\install_prereq_win.bat
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          xcopy /E /I /y local_install prereq_cache\local_install
+          cmake -S ci-utils\tensorstore_prebuild -B C:\ts_cmake_prebuild -DCMAKE_GENERATOR=Ninja -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache -DCMAKE_BUILD_TYPE=Release
+          if %errorlevel% neq 0 exit /b %errorlevel%
+          cmake --build C:\ts_cmake_prebuild --parallel
+          if %errorlevel% neq 0 exit /b %errorlevel%
+
+  prebuild_macos_arm64:
+    name: Prebuild (macOS arm64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Restore prereq cache
+        id: prereq-cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-macos-14-arm64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        id: ts-cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-macos-14-arm64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
+
+      - name: Run macOS arm64 prebuild
+        if: steps.prereq-cache.outputs.cache-hit != 'true' || steps.ts-cache.outputs.cache-hit != 'true'
+        run: |
+          brew install nasm
+          brew uninstall --ignore-dependencies jpeg-turbo || true
+          bash ci-utils/install_prereq_linux.sh ./prereq_cache/local_install
+          cmake -S ci-utils/tensorstore_prebuild -B /tmp/ts_cmake_prebuild \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTENSORSTORE_USE_SYSTEM_JPEG=ON \
+            -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache
+          cmake --build /tmp/ts_cmake_prebuild -j$(sysctl -n hw.ncpu)
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Stage 2 — Wheel-build jobs (4 Python versions in parallel per OS)
+  #   Each job needs only its own OS's prebuild, so it starts as soon as
+  #   that prebuild completes — independent of the other OSes.
+  # ──────────────────────────────────────────────────────────────────────────
+
+  build_wheels_linux:
+    name: Build wheels (Linux, ${{ matrix.cibw_build }})
+    runs-on: ubuntu-22.04
+    needs: [prebuild_linux]
+    continue-on-error: true
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-15-intel, windows-latest]
-        cibw_archs: ["auto64"]
         cibw_build: ["cp310", "cp311", "cp312", "cp313"]
 
     steps:
       - uses: actions/checkout@v3
-        name: Check out
 
-      - uses: ilammy/msvc-dev-cmd@v1
-        name: Add MSVS Path
+      - name: Restore prereq cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-ubuntu-22.04-auto64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
 
-      - name: Add NASM
-        if: matrix.os == 'windows-latest'
-        uses: ilammy/setup-nasm@v1
+      - name: Restore TensorStore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-ubuntu-22.04-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
 
-      - name: Add Ninja
-        if: matrix.os == 'windows-latest'
-        uses: seanmiddleditch/gha-setup-ninja@master
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ccache_dir
+          key: ccache-linux-auto64-${{ github.sha }}-${{ matrix.cibw_build }}
+          restore-keys: |
+            ccache-linux-auto64-${{ github.sha }}
+            ccache-linux-auto64-
 
       - uses: actions/setup-python@v4
-        name: Install Python
         with:
           python-version: '3.11'
 
       - name: Install cibuildwheel
-        run: |
-          python -m pip install cibuildwheel delvewheel wheel
+        run: python -m pip install cibuildwheel wheel
 
-      - name: Building wheels 
-        run: |
-          python -m cibuildwheel --output-dir dist
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: ${{ matrix.cibw_build }}-*
           CIBW_BUILD_VERBOSITY: 3
           CIBW_SKIP: "*musllinux*"
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          CIBW_BEFORE_ALL_MACOS: brew install nasm &&
-                          bash ci-utils/install_prereq_linux.sh &&
-                          mkdir -p /tmp/argolid_bld &&
-                          brew uninstall --ignore-dependencies openssl || true &&
-                          sudo rm -rf /usr/local/include/openssl &&
-                          cp -r local_install /tmp/argolid_bld
-          CIBW_BEFORE_ALL_LINUX: curl -L https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/nasm-2.15.05.tar.bz2 -o nasm-2.15.05.tar.bz2 &&
-                                   tar -xjf nasm-2.15.05.tar.bz2 &&
-                                   cd nasm-2.15.05 &&
-                                   ./configure && 
-                                   make && 
-                                   make install &&
-                                   cd .. &&
-                                   bash ci-utils/install_prereq_linux.sh &&
-                                   mkdir -p /tmp/argolid_bld &&
-                                   cp -r local_install /tmp/argolid_bld
-          CIBW_BEFORE_ALL_WINDOWS: ci-utils\install_prereq_win.bat &&
-                                   xcopy /E /I /y local_install C:\TEMP\argolid_bld\local_install 
-          CIBW_ENVIRONMENT_MACOS: >-
-            MACOSX_DEPLOYMENT_TARGET=11.0
-            REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64"
-            ON_GITHUB="TRUE"
-            ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install"
-            CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-Wno-missing-template-arg-list-after-template-kw -DTENSORSTORE_USE_SYSTEM_JPEG=ON -DTENSORSTORE_USE_SYSTEM_ZLIB=ON -DTENSORSTORE_USE_SYSTEM_PNG=ON"
+          CIBW_BEFORE_ALL_LINUX: bash /project/ci-utils/before_all_linux.sh
           CIBW_ENVIRONMENT_LINUX: >-
             LD_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64:$LD_LIBRARY_PATH"
-            ON_GITHUB="TRUE" 
+            ON_GITHUB="TRUE"
             ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install"
-            CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON -DTENSORSTORE_USE_SYSTEM_ZLIB=ON -DTENSORSTORE_USE_SYSTEM_PNG=ON"
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-listdeps {wheel} && DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel}
-          CIBW_ENVIRONMENT_WINDOWS: PATH="$TEMP\\argolid\\bin;$PATH" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="C:\\TEMP\\argolid_bld\\local_install" CMAKE_ARGS="-DCMAKE_GENERATOR=Ninja"
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel}"
-          CIBW_ARCHS: ${{ matrix.cibw_archs }}
+            CCACHE_DIR=/project/ccache_dir
+            CCACHE_MAXSIZE=5G
+            CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON -DTENSORSTORE_USE_SYSTEM_ZLIB=ON -DTENSORSTORE_USE_SYSTEM_PNG=ON -DFETCHCONTENT_BASE_DIR=/project/ts_fc_cache"
+          CIBW_ARCHS: auto64
           CIBW_BEFORE_TEST_LINUX: dnf -y install maven java
           CIBW_TEST_REQUIRES: bfio>=2.4.0 tensorstore numpy pytest
           CIBW_TEST_COMMAND: python -W default -m pytest -vv -s {project}/tests/python
@@ -94,63 +236,183 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: argolid-wheels-${{ matrix.os }}-${{ matrix.cibw_archs }}-${{ matrix.cibw_build }}
+          name: argolid-wheels-linux-auto64-${{ matrix.cibw_build }}
           path: dist/*.whl
           retention-days: 1
 
-  build_wheels_apple_arm64:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  build_wheels_macos_intel:
+    name: Build wheels (macOS intel, ${{ matrix.cibw_build }})
+    runs-on: macos-15-intel
+    needs: [prebuild_macos_intel]
     continue-on-error: true
     env:
-      MACOSX_DEPLOYMENT_TARGET: "11.0"
+      MACOSX_DEPLOYMENT_TARGET: "10.15"
     strategy:
       matrix:
-        os: [macos-14]
-        cibw_archs: ["arm64"]
         cibw_build: ["cp310", "cp311", "cp312", "cp313"]
 
     steps:
       - uses: actions/checkout@v3
-        name: Check out
+
+      - name: Restore prereq cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-macos-15-intel-auto64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-macos-15-intel-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
 
       - uses: actions/setup-python@v4
-        name: Install Python
         with:
           python-version: '3.11'
-  
-      - name: Install cibuildwheel
-        run: |
-          python -m pip install cibuildwheel delocate wheel
 
-      - name: Building wheels 
-        run: |
-          python -m cibuildwheel --output-dir dist
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel wheel
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: ${{ matrix.cibw_build }}-*
           CIBW_BUILD_VERBOSITY: 3
-          CIBW_ARCHS_MACOS: arm64
-          CIBW_BEFORE_ALL_MACOS:  brew install nasm &&
-                                  brew uninstall --ignore-dependencies jpeg-turbo &&
-                                  bash ci-utils/install_prereq_linux.sh &&
-                                  mkdir -p /tmp/argolid_bld &&
-                                  cp -r local_install /tmp/argolid_bld
+          CIBW_BEFORE_ALL_MACOS: brew install nasm &&
+                          bash ci-utils/before_all_macos.sh &&
+                          brew uninstall --ignore-dependencies openssl || true &&
+                          sudo rm -rf /usr/local/include/openssl
           CIBW_ENVIRONMENT_MACOS: >-
             MACOSX_DEPLOYMENT_TARGET=11.0
             REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64"
             ON_GITHUB="TRUE"
             ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install"
-            CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON"
+            CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-Wno-missing-template-arg-list-after-template-kw -DTENSORSTORE_USE_SYSTEM_JPEG=ON -DTENSORSTORE_USE_SYSTEM_ZLIB=ON -DTENSORSTORE_USE_SYSTEM_PNG=ON -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache"
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-listdeps {wheel} && DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel}
+          CIBW_ARCHS: auto64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: argolid-wheels-macos-15-intel-auto64-${{ matrix.cibw_build }}
+          path: dist/*.whl
+          retention-days: 1
+
+  build_wheels_windows:
+    name: Build wheels (Windows, ${{ matrix.cibw_build }})
+    runs-on: windows-latest
+    needs: [prebuild_windows]
+    continue-on-error: true
+    strategy:
+      matrix:
+        cibw_build: ["cp310", "cp311", "cp312", "cp313"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Restore prereq cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-windows-latest-auto64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-windows-latest-auto64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        name: Add MSVS Path
+
+      - name: Add NASM
+        uses: ilammy/setup-nasm@v1
+
+      - name: Add Ninja
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel delvewheel wheel
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir dist
+        env:
+          CIBW_BUILD: ${{ matrix.cibw_build }}-*
+          CIBW_BUILD_VERBOSITY: 3
+          CIBW_BEFORE_ALL_WINDOWS: ci-utils\before_all_win.bat
+          CIBW_ENVIRONMENT_WINDOWS: PATH="$TEMP\\argolid\\bin;$PATH" ON_GITHUB="TRUE" ARGOLID_DEP_DIR="C:\\TEMP\\argolid_bld\\local_install" CMAKE_ARGS="-DCMAKE_GENERATOR=Ninja -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache"
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel}"
+          CIBW_ARCHS: auto64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: argolid-wheels-windows-auto64-${{ matrix.cibw_build }}
+          path: dist/*.whl
+          retention-days: 1
+
+  build_wheels_apple_arm64:
+    name: Build wheels (macOS arm64, ${{ matrix.cibw_build }})
+    runs-on: macos-14
+    needs: [prebuild_macos_arm64]
+    continue-on-error: true
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    strategy:
+      matrix:
+        cibw_build: ["cp310", "cp311", "cp312", "cp313"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Restore prereq cache
+        uses: actions/cache@v4
+        with:
+          path: prereq_cache
+          key: prereq-macos-14-arm64-${{ hashFiles('ci-utils/install_prereq_linux.sh', 'ci-utils/install_prereq_win.bat') }}
+
+      - name: Restore TensorStore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: ts_fc_cache
+          key: ts-fc-macos-14-arm64-${{ hashFiles('CMakeLists.txt', 'ci-utils/tensorstore_prebuild/CMakeLists.txt') }}
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel delocate wheel
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir dist
+        env:
+          CIBW_BUILD: ${{ matrix.cibw_build }}-*
+          CIBW_BUILD_VERBOSITY: 3
+          CIBW_ARCHS_MACOS: arm64
+          CIBW_BEFORE_ALL_MACOS: brew install nasm &&
+                                  brew uninstall --ignore-dependencies jpeg-turbo &&
+                                  bash ci-utils/before_all_macos.sh
+          CIBW_ENVIRONMENT_MACOS: >-
+            MACOSX_DEPLOYMENT_TARGET=11.0
+            REPAIR_LIBRARY_PATH="/tmp/argolid_bld/local_install/lib:/tmp/argolid_bld/local_install/lib64"
+            ON_GITHUB="TRUE"
+            ARGOLID_DEP_DIR="/tmp/argolid_bld/local_install"
+            CMAKE_ARGS="-DTENSORSTORE_USE_SYSTEM_JPEG=ON -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/ts_fc_cache"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-listdeps {wheel} &&
             MACOSX_DEPLOYMENT_TARGET=11.0 DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel} -e libc++ -e libunwind
-          CIBW_ARCHS: ${{ matrix.cibw_archs }}
+          CIBW_ARCHS: arm64
           CIBW_TEST_REQUIRES: bfio>=2.4.0 tensorstore numpy pytest
           CIBW_TEST_COMMAND: python -W default -m pytest -vv -s {project}/tests/python
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: argolid-wheels-apple-arm64-${{ matrix.os }}-${{ matrix.cibw_archs }}-${{ matrix.cibw_build }}
+          name: argolid-wheels-apple-arm64-${{ matrix.cibw_build }}
           path: dist/*.whl
           retention-days: 1
