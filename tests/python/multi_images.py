@@ -21,7 +21,7 @@ def generate_pyramid_from_repo_path(
     Clone the repo if needed, locate the image file, then run Argolid pyramid generation.
     """
     repo_dir = ensure_repo_cloned(repo)
-    input_dir = str(repo_dir / "argolid")
+    input_dir = str(repo_dir / "argolid" / "2D")
 
     output_dir = Path(output_dir)
     output_dir.parent.mkdir(parents=True, exist_ok=True)

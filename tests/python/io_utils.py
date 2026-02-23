@@ -6,7 +6,7 @@ import subprocess
 
 @dataclass(frozen=True)
 class PolusTestDataRepo:
-    repo_url: str = "https://github.com/sameeul/polus-test-data.git"
+    repo_url: str = "https://github.com/sameeul//polus-test-data.git"
     repo_dir: Path = Path("polus-test-data")
     default_branch: str = "main"
 
@@ -21,7 +21,17 @@ def ensure_repo_cloned(repo: PolusTestDataRepo, depth: int = 1) -> Path:
 
     repo.repo_dir.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        ["git", "clone", "--depth", str(depth), repo.repo_url, str(repo.repo_dir)],
+        [
+            "git",
+            "clone",
+            "--branch",
+            repo.default_branch,
+            "--single-branch",
+            "--depth",
+            str(depth),
+            repo.repo_url,
+            str(repo.repo_dir),
+        ],
         check=True,
     )
     return repo.repo_dir
